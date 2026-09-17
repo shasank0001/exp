@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Thread — ML Copilot</title>
+  <link rel="stylesheet" href="shared.css">
+  <link rel="stylesheet" href="thread.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" id="thread-navigation" aria-label="Thread navigation">
+      <div class="sidebar-brand"><a class="row logo" href="../index.html#1" aria-label="ML Copilot design gallery"><span class="mark">m/</span><span class="app-title">ML Copilot</span></a><button class="btn quiet icon-btn panel-close" data-panel-close aria-label="Close navigation"><span data-icon="close"></span></button></div>
+      <button class="workspace-select" data-action="thread" data-title="vision-lab"><span class="workspace-icon" data-icon="folder"></span><span class="grow"><strong>vision-lab</strong><small>Personal workspace</small></span><span data-icon="chevron"></span></button>
+      <button class="btn new-thread" data-action="new"><span data-icon="plus"></span> New thread <span class="new-hint" aria-hidden="true">↗</span></button>
+      <nav aria-label="Research threads">
+        <div class="nav-label">Today <span>02</span></div>
+        <button class="nav-item selected current-thread" aria-current="page"><span class="thread-dot"></span><span>Train a CIFAR-10 baseline</span></button>
+        <button class="nav-item" data-action="thread" data-title="Why did the loss spike?" data-summary="The earlier loss spike aligned with a learning-rate restart. I recommended a cosine schedule without restarts and preserved the original config."><span data-icon="clock"></span><span>Why did the loss spike?</span></button>
+        <div class="nav-label">Yesterday</div>
+        <button class="nav-item" data-action="dataset"><span data-icon="grid"></span> Inspect the training split</button>
+        <button class="nav-item" data-action="environment"><span data-icon="terminal"></span> Set up CUDA environment</button>
+        <div class="nav-label project-label">Project</div>
+        <button class="nav-item" data-action="compare"><span data-icon="chart"></span> Experiments <span class="count">4</span></button>
+        <button class="nav-item" data-action="dataset"><span data-icon="grid"></span> Datasets <span class="count">1</span></button>
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="local-note"><span data-icon="folder"></span><div><strong>Your work stays yours.</strong><p>Local files. You control compute.</p></div></div>
+        <button class="profile" data-action="settings"><span class="avatar">SK</span><span class="grow"><strong>Personal workspace</strong><small>Local · no cloud sync</small></span><span data-icon="settings"></span></button>
+      </div>
+    </aside>
+
+    <header class="workspace spread">
+      <div class="row breadcrumb"><button class="btn quiet icon-btn nav-toggle" data-panel-toggle="thread-navigation" aria-controls="thread-navigation" aria-expanded="false" aria-label="Open thread navigation"><span data-icon="book"></span></button><span class="muted">vision-lab</span><span class="breadcrumb-slash">/</span><span class="breadcrumb-current">CIFAR-10 baseline</span></div>
+      <div class="row header-actions"><span class="branch"><span data-icon="branch"></span> main</span><button class="btn quiet icon-btn" data-action="export" aria-label="Export thread note" title="Export thread note"><span data-icon="file"></span></button><button class="btn context-toggle" data-panel-toggle="thread-context" aria-controls="thread-context" aria-expanded="false"><span data-icon="settings"></span> <span>Context</span></button></div>
+    </header>
+
+    <main class="conversation-pane" id="conversation">
+      <div class="conversation">
+        <div class="intro"><div class="eyebrow"><span class="intro-rule"></span> Research thread <span class="intro-number">/ 01</span></div><h1>A good baseline<br>is a beginning.</h1><p>Build, observe, and iterate. Keep the context.</p><div class="intro-tags"><span><span data-icon="folder"></span> vision-lab</span><span><span data-icon="cpu"></span> Local compute</span><span class="preview-label">Interactive preview</span></div></div>
+        <div class="date-divider"><span>Today, 09:41</span></div>
+        <article class="chat-message user-message"><span class="avatar user-avatar">SK</span><div class="content"><div class="byline">You <span>09:41</span></div><div class="user-bubble"><p>Let’s train a ResNet-18 baseline on CIFAR-10. Keep it reproducible, and help me watch for anything unusual.</p></div></div></article>
+        <article class="chat-message agent-message"><span class="avatar agent-avatar">m/</span><div class="content"><div class="byline">ML Copilot <span class="agent-label">Agent</span><span>09:41</span></div><p>I’ll start with a reproducible baseline: SGD, a cosine schedule, and seed 42. Here’s the setup and a preview of the run.</p>
+          <div class="agent-steps"><span><span data-icon="check"></span> Environment ready</span><span><span data-icon="check"></span> 45k / 5k split prepared</span></div>
+          <details class="artifact-card" open><summary><span class="row"><span data-icon="file"></span><strong>Prepared files</strong><span class="artifact-count">3</span></span><span class="artifact-summary">Preview <span data-icon="chevron"></span></span></summary><div class="artifact-files"><div class="file"><button data-file="train.py"><span class="file-type">PY</span> train.py <span class="file-description">Training loop</span></button><span>+128</span></div><div class="file"><button data-file="baseline.yaml"><span class="file-type yaml">YML</span> baseline.yaml <span class="file-description">Run config</span></button><span>+24</span></div><div class="file"><button data-file="data.py"><span class="file-type">PY</span> data.py <span class="file-description">Data pipeline</span></button><span>+46</span></div></div></details>
+          <section class="run-card" aria-label="Simulated training run">
+            <div class="spread run-head"><div class="row"><span class="run-icon" data-icon="chart"></span><div><h2>resnet18-cifar10</h2><span class="mono muted">Run #024 · baseline</span></div></div><span class="pill green run-state"><span class="dot"></span><span data-run-status>Running</span></span></div>
+            <div class="run-metrics"><div class="primary-metric"><span class="metric-label">Validation accuracy</span><strong>87.42<span>%</span></strong></div><div><span class="metric-label">Train loss</span><strong>0.218</strong></div><div><span class="metric-label">Val. loss</span><strong>0.392</strong></div></div>
+            <div class="spread chart-labels"><span class="eyebrow">Loss / epoch</span><div class="legend"><span><i></i>Train</span><span><i class="val"></i>Validation</span></div></div><div data-chart></div>
+            <div class="run-progress"><div class="spread"><span><strong>24</strong> / 100 epochs</span><span data-eta>~44m remaining</span></div><div class="progress"><span style="width:24%"></span></div></div>
+            <div class="spread run-footer"><span class="muted"><span data-icon="clock"></span> 14m 32s elapsed</span><div class="row"><button class="btn quiet compact-pause" data-action="pause"><span data-icon="pause"></span> Pause run</button><button class="btn quiet" data-action="logs">View logs <span data-icon="chevron"></span></button></div></div>
+          </section>
+          <div class="observation"><span data-icon="check"></span><p>Loss is decreasing steadily. No instability in the simulated logs — no intervention needed.</p></div>
+          <div class="message-actions"><button class="btn quiet" data-prompt="Explain the training and validation loss curves."><span data-icon="chart"></span> Explain these curves</button><button class="btn quiet" data-prompt="What should we try after this baseline finishes?">Plan the next experiment <span data-icon="chevron"></span></button></div>
+        </div></article>
+        <div data-messages aria-live="polite" aria-relevant="additions"></div>
+      </div>
+      <div class="composer-dock"><div class="composer-inner"><div data-composer="What would you like to explore next?"></div><div class="composer-footnote"><span>You approve new compute. <span class="footnote-secondary">All data in this preview is simulated.</span></span><span class="enter-hint"><kbd>↵</kbd> send</span></div></div></div>
+    </main>
+
+    <aside class="inspector" id="thread-context" aria-label="Thread context">
+      <div class="inspector-heading spread"><h2>Thread context</h2><span class="context-count">03</span><button class="btn quiet icon-btn panel-close" data-panel-close aria-label="Close thread context"><span data-icon="close"></span></button></div>
+      <div class="inspector-section"><div class="spread"><span class="eyebrow">Active run</span><span class="pill green run-state"><span class="dot"></span><span data-run-status>Running</span></span></div><h3 class="context-title">ResNet-18 baseline</h3><p class="muted small">CIFAR-10 <span class="text-separator">/</span> seed 42</p><div class="progress mt"><span style="width:24%"></span></div><div class="spread small muted" style="margin-top:8px"><span>Epoch 24 of 100</span><span>24%</span></div><button class="btn pause-control" data-action="pause"><span data-icon="pause"></span> Pause run</button><p class="context-caption">Run controls are simulated.</p></div>
+      <div class="inspector-section"><div class="spread"><span class="eyebrow">Local compute</span><span class="healthy"><span class="dot"></span> Healthy</span></div><div class="compute-title row"><span class="compute-icon" data-icon="cpu"></span><div><h3>NVIDIA RTX 4090</h3><p class="muted small">CUDA 12.1 · single GPU</p></div></div><div class="spread small memory-label"><span class="muted">GPU memory</span><span>8.4 <span class="muted">/ 24 GB</span></span></div><div class="memory-bars" aria-label="GPU memory 35 percent used"></div><button class="context-link" data-action="environment">Environment details <span data-icon="chevron"></span></button></div>
+      <div class="inspector-section"><div class="spread"><span class="eyebrow">Dataset</span><span class="mono muted">CIFAR-10</span></div><div class="dataset-grid" data-samples></div><div class="dataset-meta"><span>10 classes</span><span>32 × 32 RGB</span></div><button class="context-link" data-action="dataset">Inspect dataset <span data-icon="chevron"></span></button></div>
+      <div class="checkpoint-section"><span class="eyebrow">Latest checkpoint</span><button class="checkpoint" data-action="checkpoint"><span data-icon="file"></span><span class="grow"><strong>epoch_024.pt</strong><small>44.8 MB · epoch 24</small></span><span data-icon="chevron"></span></button><div class="checkpoint-note"><span data-icon="check"></span> Model, optimizer & RNG state</div></div>
+      <div class="context-bottom"><span data-icon="link"></span> Context stays with this thread</div>
+    </aside>
+    <footer class="footer-status"><span><span class="dot"></span> Local workspace <span class="status-divider">/</span> vision-lab</span><span>Python 3.11 <span class="status-divider">·</span> PyTorch 2.4.1 <span class="preview-status">Mock preview</span></span></footer>
+  </div>
+  <button class="panel-backdrop" aria-label="Close side panel" hidden></button>
+  <script src="shared.js"></script>
+  <script src="thread.js"></script>
+</body>
+</html>

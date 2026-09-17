@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ML Copilot — Delegation Review · vision-lab</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+:root{--sage:#e9efe7;--sage2:#dde6da;--ink:#232b24;--pine:#3d5a43;--pine2:#5c8062}
+body{background:#edf1ea;color:var(--ink)}
+.topbar{max-width:1300px;margin:0 auto;padding:18px 22px 0}
+.shell{max-width:1300px;margin:14px auto 0;padding:0 22px 10px;display:grid;grid-template-columns:258px minmax(0,1fr) 288px;gap:14px;align-items:start}
+.headcard{background:#f7faf6;border:1px solid #dfe5dc;border-radius:12px;padding:16px 18px;display:flex;align-items:center;gap:14px}
+.headcard h1{font-size:19px;letter-spacing:-.5px}
+.counters{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}
+.counter{background:#fff;border:1px solid #dfe5dc;border-radius:8px;padding:7px 11px;text-align:left;min-width:92px}
+.counter b{display:block;font-size:18px;letter-spacing:-.5px;line-height:1.1}
+.counter span{font-size:9px;letter-spacing:.8px;text-transform:uppercase;color:#7d877d;font-family:var(--mono)}
+.counter.amber b{color:#a14d32}.counter.green b{color:var(--pine2)}.counter.slate b{color:#43506b}
+.col{background:#f7faf6;border:1px solid #dfe5dc;border-radius:12px;overflow:hidden}
+.colhead{padding:13px 15px;border-bottom:1px solid #e2e7e0;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.colhead h2{font-size:12px;letter-spacing:.2px}
+.colbody{padding:12px;display:flex;flex-direction:column;gap:10px}
+.filters{display:flex;flex-wrap:wrap;gap:6px}
+.fchip{border:1px solid #d5dcd2;background:#fff;border-radius:20px;padding:4px 10px;font-size:10px;font-weight:600;color:#5b665b;cursor:pointer}
+.fchip.on{background:var(--pine);border-color:var(--pine);color:#fff}
+.task{text-align:left;background:#fff;border:1px solid #e0e6de;border-radius:9px;padding:11px 12px;width:100%;cursor:pointer;display:block}
+.task:hover{border-color:#b9c6b4}
+.task.sel{border-color:var(--pine);box-shadow:0 0 0 1px var(--pine)}
+.task h3{font-size:12px;margin:6px 0 3px}
+.task p{font-size:11px;color:#6b756b;line-height:1.5}
+.task .meta{display:flex;align-items:center;gap:6px;margin-top:8px}
+.st{font:600 9px var(--mono);letter-spacing:.7px;text-transform:uppercase;padding:3px 7px;border-radius:5px;border:1px solid}
+.st.queue{color:#6b7280;background:#f1f3ef;border-color:#e0e4dc}
+.st.run{color:#2f5aa0;background:#e9f0fb;border-color:#c9d9f2}
+.st.review{color:#a14d32;background:#f9ece4;border-color:#ecd2c2}
+.st.done{color:#3d5a43;background:#e4eee3;border-color:#c4d6c2}
+.elapsed{margin-left:auto;font:10px var(--mono);color:#8a937f}
+.rev{background:#fff;border:1px solid #e0e6de;border-radius:11px;padding:0;overflow:hidden;transition:border-color .15s}
+.rev.decided{opacity:.92}
+.rev-top{padding:15px 16px 0}
+.rev-top h3{font-size:13.5px;letter-spacing:-.2px;margin:7px 0 4px}
+.rev-top .sub{font-size:11.5px;color:#5f6a5f;line-height:1.65}
+.diff{background:#20261f;color:#dfe6dc;border-radius:8px;margin:12px 16px 0;padding:12px 13px;font:10.5px/1.75 var(--mono);overflow:auto}
+.diff .add{color:#9ed3a4}.diff .del{color:#e8a08a}.diff .h{color:#8fa58f}
+.filerow{display:flex;gap:8px;flex-wrap:wrap;padding:11px 16px 0}
+.fbtn{font:10px var(--mono);border:1px solid #dfe5dc;background:#f4f7f2;border-radius:6px;padding:5px 9px;cursor:pointer;color:#3d4a3d}
+.fbtn:hover{background:#e7efe3}
+.testline{display:flex;align-items:center;gap:8px;margin:11px 16px 0;font-size:11px;color:#3d5a43;background:#eef4ec;border:1px solid #d5e2d3;border-radius:7px;padding:8px 11px}
+.rev-actions{display:flex;gap:8px;padding:13px 16px 15px;flex-wrap:wrap}
+.abtn{flex:1;min-width:120px;border-radius:7px;padding:9px 10px;font-size:11px;font-weight:650;border:1px solid;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.abtn.ok{background:#3d5a43;border-color:#3d5a43;color:#fff}
+.abtn.no{background:#fff;border-color:#dfc4b6;color:#a14d32}
+.abtn.ch{background:#fff;border-color:#d5dcd2;color:#43506b}
+.abtn:disabled{opacity:.55;cursor:default}
+.verdict{margin:0 16px 15px;font-size:11px;border-radius:7px;padding:9px 12px;display:none}
+.verdict.show{display:block}
+.verdict.ok{display:block;background:#e4eee3;color:#33513a;border:1px solid #c4d6c2}
+.verdict.no{display:block;background:#f9ece4;color:#8f4429;border:1px solid #ecd2c2}
+.verdict.ch{display:block;background:#e9f0fb;color:#2f4d86;border:1px solid #c9d9f2}
+.ledger{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.ledger li{display:flex;gap:10px;padding:9px 2px;border-bottom:1px solid #e8ede6;font-size:11px;line-height:1.55}
+.ledger li:last-child{border-bottom:0}
+.ledger time{font:9.5px var(--mono);color:#8a937f;white-space:nowrap;padding-top:2px;min-width:52px}
+.ledger .ldot{width:7px;height:7px;border-radius:100%;margin-top:5px;flex-shrink:0}
+.mockbar{max-width:1300px;margin:8px auto 0;padding:0 22px 22px}
+.mockbar div{font:10px var(--mono);color:#7d877d;background:#e4eae1;border:1px dashed #b9c6b4;border-radius:8px;padding:8px 12px}
+.queue-note{background:#fff;border:1px dashed #c3cec0;border-radius:9px;padding:11px 13px;font-size:11px;color:#6b756b}
+.mini{font:10px var(--mono);color:#7d877d}
+@media(max-width:1020px){.shell{grid-template-columns:230px minmax(0,1fr)}.col.right{grid-column:1/-1}.col.right .colbody{max-height:none}}
+@media(max-width:700px){.shell{grid-template-columns:1fr}.topbar,.shell,.mockbar{padding-left:12px;padding-right:12px}.counters{width:100%}.counter{flex:1}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="headcard">
+    <div class="mark">m</div>
+    <div>
+      <div class="eyebrow">ML Copilot · vision-lab · delegation review</div>
+      <h1>Agent inbox — calm control tower</h1>
+      <p class="muted small" style="margin-top:2px">ResNet-18 · CIFAR-10 · seed 42 · review before anything merges or launches.</p>
+    </div>
+    <div class="counters" role="status" aria-label="Review counters">
+      <div class="counter amber"><span>Needs review</span><b id="cReview">3</b></div>
+      <div class="counter slate"><span>Running</span><b id="cRun">2</b></div>
+      <div class="counter green"><span>Approved</span><b id="cDone">0</b></div>
+    </div>
+  </div>
+  <div class="row mt12" style="gap:8px;flex-wrap:wrap">
+    <button class="btn" data-action="environment">Environment</button>
+    <button class="btn" data-action="pause">Pause run</button>
+    <button class="btn" data-action="compare">Compare baselines</button>
+    <span class="mini" style="margin-left:auto">run #024 · epoch 24/100 · val 87.42% · <span data-run-status>Running</span></span>
+  </div>
+</div>
+
+<div class="shell">
+  <!-- LEFT -->
+  <section class="col" aria-label="Delegated tasks">
+    <div class="colhead"><h2>Delegated tasks</h2><span class="pill">7 total</span></div>
+    <div class="colbody">
+      <div class="filters" role="group" aria-label="Filter tasks by status">
+        <button class="fchip on" data-filter="all">All</button>
+        <button class="fchip" data-filter="review">Needs review</button>
+        <button class="fchip" data-filter="run">Running</button>
+        <button class="fchip" data-filter="queue">Queued</button>
+        <button class="fchip" data-filter="done">Done</button>
+      </div>
+      <div id="taskList" style="display:flex;flex-direction:column;gap:10px">
+        <button class="task sel" data-status="review" data-target="rev-lr"><span class="st review">● needs review</span><h3>Fix LR schedule bug</h3><p>Cosine restarts every epoch instead of every 30. Patch ready.</p><div class="meta"><span class="mini">agent-2 · 12 min</span><span class="elapsed">3 files</span></div></button>
+        <button class="task" data-status="review" data-target="rev-aug"><span class="st review">● needs review</span><h3>Add RandAugment sweep</h3><p>N=2, M=9/14/19 on held-out val split. No test overlap.</p><div class="meta"><span class="mini">agent-1 · 26 min</span><span class="elapsed">2 files</span></div></button>
+        <button class="task" data-status="review" data-target="rev-ckpt"><span class="st review">● needs review</span><h3>Prune stale checkpoints</h3><p>Keep best + last 3, frees ~180 MB. Dry-run log attached.</p><div class="meta"><span class="mini">agent-3 · 41 min</span><span class="elapsed">1 file</span></div></button>
+        <button class="task" data-status="run" data-target="rev-lr"><span class="st run">● running</span><h3>Baseline #024 to epoch 40</h3><p>ResNet-18, SGD + cosine. TensorBoard live.</p><div class="meta"><span class="mini">agent-1 · epoch 24/40</span><span class="elapsed">62%</span></div></button>
+        <button class="task" data-status="run" data-target="rev-aug"><span class="st run">● running</span><h3>Label-noise audit</h3><p>Top-200 low-confidence val samples for inspection.</p><div class="meta"><span class="mini">agent-2 · 34%</span><span class="elapsed">est 8m</span></div></button>
+        <button class="task" data-status="queue" data-target="rev-ckpt"><span class="st queue">○ queued</span><h3>Mixed-precision trial</h3><p>AMP fp16, blocked until #024 finishes.</p><div class="meta"><span class="mini">agent-3 · waiting</span><span class="elapsed">—</span></div></button>
+        <button class="task" data-status="done" data-target="rev-lr"><span class="st done">✓ done</span><h3>Seed-42 repro check</h3><p>Val 87.42% reproduced ±0.06. Logged.</p><div class="meta"><span class="mini">agent-1 · done 09:12</span><span class="elapsed">✓</span></div></button>
+      </div>
+      <div class="queue-note">Queue policy: at most <b>2 running</b> · reviews required before merge or launch. <button class="fbtn" data-action="logs" style="margin-top:6px">view run logs</button></div>
+    </div>
+  </section>
+
+  <!-- CENTER -->
+  <section class="col" aria-label="Review queue">
+    <div class="colhead"><h2>Review queue <span class="muted">— agent presents, you decide</span></h2><span class="pill green"><span class="dot"></span><span id="qCount">3 awaiting decision</span></span></div>
+    <div class="colbody">
+      <div data-chart></div>
+      <div class="legend"><span><i></i>train loss 0.218</span><span><i class="val"></i>val loss 0.392</span><span class="mini">epoch 24 · shared helper chart</span></div>
+
+      <article class="rev" id="rev-lr" data-card data-title="Fix LR schedule bug">
+        <div class="rev-top">
+          <span class="st review">● needs review</span> <span class="mini">agent-2 · 12 min ago · run #024 context</span>
+          <h3>Fixed LR schedule bug — here is the diff, 3 files, tests pass</h3>
+          <p class="sub">CosineAnnealingLR was re-instantiated inside the epoch loop, so the schedule restarted every epoch. Moved to one construction + <span class="mono">scheduler.step()</span> per epoch. Val curve should smooth out after epoch 25.</p>
+        </div>
+        <div class="diff" aria-label="Diff summary">@@ train.py — scheduler hoisted out of loop
+-    scheduler = CosineAnnealingLR(opt, T_max=30)  # inside loop ❌
++    scheduler = CosineAnnealingLR(opt, T_max=30)  # once, before loop <span class="add">✓</span>
+<span class="h">@@ baseline.yaml — T_max pinned</span>
+<span class="del">-  T_max: 100</span>  <span class="add">+  T_max: 30</span>
+<span class="h">@@ tests — 14/14 pass (mock)</span>  test_scheduler_monotonic … <span class="add">ok</span></div>
+        <div class="filerow">
+          <button class="fbtn" data-file="train.py">▤ train.py</button>
+          <button class="fbtn" data-file="baseline.yaml">▤ baseline.yaml</button>
+          <button class="fbtn" data-diff="rev-lr">＋ full diff</button>
+          <button class="fbtn" data-action="checkpoint">◈ checkpoint</button>
+        </div>
+        <div class="testline"><span class="check">✓</span> pytest 14/14 pass · lint clean · seed 42 unchanged</div>
+        <div class="rev-actions">
+          <button class="abtn ok" data-ra="approve">✓ Approve &amp; merge</button>
+          <button class="abtn ch" data-ra="changes">↩ Request changes</button>
+          <button class="abtn no" data-ra="reject">✕ Reject</button>
+        </div>
+        <p class="verdict" data-verdict></p>
+      </article>
+
+      <article class="rev" id="rev-aug" data-card data-title="RandAugment sweep">
+        <div class="rev-top">
+          <span class="st review">● needs review</span> <span class="mini">agent-1 · 26 min ago · val-only eval</span>
+          <h3>RandAugment sweep proposal — N=2, M ∈ {9, 14, 19}</h3>
+          <p class="sub">Three short 20-epoch branches off epoch-24 checkpoint. Val split only, test stays locked. Requests one GPU slot when #024 finishes.</p>
+        </div>
+        <div class="diff" aria-label="Diff summary">@@ data.py — augmentation branch
++    transforms.RandAugment(num_ops=2, magnitude=M)  <span class="add">new</span>
+<span class="h">@@ plan — 3 branches × 20 epochs (~35 min)</span>
+M=9 → mild   M=14 → medium   M=19 → strong
+<span class="h">@@ guardrail</span>  test set locked · seed fixed · <span class="add">needs your launch approval</span></div>
+        <div class="filerow">
+          <button class="fbtn" data-file="data.py">▤ data.py</button>
+          <button class="fbtn" data-action="dataset">◉ dataset inspector</button>
+          <button class="fbtn" data-diff="rev-aug">＋ full diff</button>
+        </div>
+        <div class="testline"><span class="check">✓</span> dry-run import ok · no test leakage detected (mock check)</div>
+        <div class="rev-actions">
+          <button class="abtn ok" data-ra="approve">✓ Approve &amp; launch</button>
+          <button class="abtn ch" data-ra="changes">↩ Request changes</button>
+          <button class="abtn no" data-ra="reject">✕ Reject</button>
+        </div>
+        <p class="verdict" data-verdict></p>
+      </article>
+
+      <article class="rev" id="rev-ckpt" data-card data-title="Prune stale checkpoints">
+        <div class="rev-top">
+          <span class="st review">● needs review</span> <span class="mini">agent-3 · 41 min ago · storage</span>
+          <h3>Prune stale checkpoints — dry run, frees ~180 MB</h3>
+          <p class="sub">Keeps best (epoch 24) + last 3. Deletion list shown; nothing removed until you approve. Reversible for 7 days in mock trash.</p>
+        </div>
+        <div class="diff" aria-label="Diff summary"><span class="h">keep</span>  epoch_022.pt  epoch_023.pt  epoch_024.pt  best.pt
+<span class="del">delete</span> epoch_001…020  (~180 MB)
+<span class="h">policy</span>  best + last 3 · trash retained 7 days</div>
+        <div class="filerow">
+          <button class="fbtn" data-action="checkpoint">◈ epoch_024.pt</button>
+          <button class="fbtn" data-diff="rev-ckpt">＋ deletion list</button>
+          <button class="fbtn" data-action="approve">shared: approve demo</button>
+        </div>
+        <div class="testline"><span class="check">✓</span> dry-run verified · best.pt checksum matches (mock)</div>
+        <div class="rev-actions">
+          <button class="abtn ok" data-ra="approve">✓ Approve cleanup</button>
+          <button class="abtn ch" data-ra="changes">↩ Request changes</button>
+          <button class="abtn no" data-ra="reject">✕ Reject</button>
+        </div>
+        <p class="verdict" data-verdict></p>
+      </article>
+
+      <div class="card">
+        <div class="section-head"><h2>Ask for clarification</h2><span class="pill">shared composer</span></div>
+        <div data-messages aria-live="polite"></div>
+        <div class="mt12" data-composer="Ask an agent to revise a proposal before you approve…"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RIGHT -->
+  <section class="col right" aria-label="Activity ledger">
+    <div class="colhead"><h2>Activity ledger</h2><span class="pill green">append-only</span></div>
+    <div class="colbody">
+      <div class="metric-grid" style="grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div class="metric"><label>Reviewed</label><strong id="mReviewed" style="font-size:20px">0</strong></div>
+        <div class="metric"><label>Pending</label><strong id="mPending" style="font-size:20px">3</strong></div>
+        <div class="metric"><label>Events</label><strong id="mEvents" style="font-size:20px">4</strong></div>
+      </div>
+      <ul class="ledger" id="ledger">
+        <li><span class="ldot" style="background:#5c8062"></span><time>09:12</time><span><b>agent-1</b> reproduced seed-42 baseline · val 87.42% · logged.</span></li>
+        <li><span class="ldot" style="background:#a14d32"></span><time>09:38</time><span><b>agent-2</b> submitted LR-schedule fix for review · 3 files.</span></li>
+        <li><span class="ldot" style="background:#a14d32"></span><time>09:51</time><span><b>agent-1</b> submitted RandAugment sweep · awaiting launch approval.</span></li>
+        <li><span class="ldot" style="background:#a14d32"></span><time>10:02</time><span><b>agent-3</b> submitted checkpoint prune dry-run · 180 MB.</span></li>
+      </ul>
+      <button class="btn" id="exportBtn" style="justify-content:center">Export ledger (.md)</button>
+    </div>
+  </section>
+</div>
+
+<div class="mockbar"><div>MOCK DATA — illustrative preview only · no code merged, no jobs launched, no files read · vision-lab / ResNet-18 / CIFAR-10</div></div>
+
+<script src="shared.js"></script>
+<script>
+(function(){
+  const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+  let approved=0, decided=0;
+  const now=()=>new Date().toTimeString().slice(0,5);
+  function stamp(msg,color){const li=document.createElement('li');li.innerHTML=`<span class="ldot" style="background:${color}"></span><time>${now()}</time><span>${msg}</span>`;$('#ledger').prepend(li);$('#mEvents').textContent=$('#ledger').children.length;}
+  function refresh(){const pend=$$('[data-card]').filter(c=>!c.dataset.decision).length;$('#cReview').textContent=pend;$('#qCount').textContent=pend?pend+' awaiting decision':'queue clear ✓';$('#mPending').textContent=pend;$('#mReviewed').textContent=decided;$('#cDone').textContent=approved;}
+  // 1 — approve / reject / request-changes updates card + counters + ledger
+  document.addEventListener('click',e=>{
+    const b=e.target.closest('[data-ra]');if(!b)return;
+    const card=b.closest('[data-card]');if(!card||card.dataset.decision)return;
+    const kind=b.dataset.ra, title=card.dataset.title;
+    card.dataset.decision=kind;decided++;
+    const v=card.querySelector('[data-verdict]');
+    card.querySelectorAll('[data-ra]').forEach(x=>x.disabled=true);
+    card.classList.add('decided');
+    const chip=card.querySelector('.st');
+    if(kind==='approve'){approved++;chip.className='st done';chip.textContent='✓ approved';v.className='verdict ok show';v.textContent='Approved '+now()+' — queued to merge at next safe point. Baseline preserved.';stamp(`<b>You</b> approved “${title}”.`, '#3d5a43');}
+    if(kind==='reject'){chip.className='st queue';chip.textContent='✕ rejected';v.className='verdict no show';v.textContent='Rejected '+now()+' — returned to agent with no merge. Baseline unchanged.';stamp(`<b>You</b> rejected “${title}”.`, '#a14d32');}
+    if(kind==='changes'){chip.className='st run';chip.textContent='↩ changes requested';v.className='verdict ch show';v.textContent='Changes requested '+now()+' — agent notified. Use the composer below to specify the revision.';stamp(`<b>You</b> requested changes on “${title}”.`, '#2f5aa0');const ta=document.querySelector('[data-composer] textarea, [data-chat] textarea');if(ta){ta.value=`Please revise "${title}": `;ta.focus();}}
+    refresh();
+  });
+  // 2 — filter by status
+  $$('[data-filter]').forEach(f=>f.addEventListener('click',()=>{
+    $$('[data-filter]').forEach(x=>x.classList.remove('on'));f.classList.add('on');
+    const k=f.dataset.filter;
+    $$('#taskList .task').forEach(t=>t.style.display=(k==='all'||t.dataset.status===k)?'':'none');
+    $$('[data-card]').forEach(c=>{
+      const map={review:1};
+      if(k==='all'){c.style.display='';return;}
+      if(k==='review'){c.style.display=c.dataset.decision?'none':'';return;}
+      c.style.display='none';
+    });
+    stamp(`Filter → <b>${f.textContent.trim()}</b>.`, '#8a937f');
+  }));
+  // left-rail selection scrolls to card
+  $$('#taskList .task').forEach(t=>t.addEventListener('click',()=>{
+    $$('#taskList .task').forEach(x=>x.classList.remove('sel'));t.classList.add('sel');
+    const el=document.getElementById(t.dataset.target);if(el)el.scrollIntoView({behavior:'smooth',block:'center'});
+  }));
+  // 3 — open diff / file detail (custom modal, complements shared data-file modals)
+  const diffs={'rev-lr':'<pre style="font:10.5px/1.8 var(--mono);background:#20261f;color:#dfe6dc;padding:14px;border-radius:8px;overflow:auto">diff --git a/train.py b/train.py\n@@ scheduler hoisted\n-    for epoch in range(100):\n-        scheduler = CosineAnnealingLR(opt, T_max=30)\n+    scheduler = CosineAnnealingLR(opt, T_max=30)\n+    for epoch in range(100):\n         train_epoch(...) \n         scheduler.step()\n\ndiff --git a/baseline.yaml\n-  T_max: 100\n+  T_max: 30\n\ntests: 14/14 pass (mock)</pre>','rev-aug':'<pre style="font:10.5px/1.8 var(--mono);background:#20261f;color:#dfe6dc;padding:14px;border-radius:8px;overflow:auto">diff --git a/data.py b/data.py\n+    transforms.RandAugment(num_ops=2, magnitude=M)\n branches: M=9 / 14 / 19 × 20 epochs\n guardrail: test locked, seed 42 (mock plan)</pre>','rev-ckpt':'<pre style="font:10.5px/1.8 var(--mono);background:#20261f;color:#dfe6dc;padding:14px;border-radius:8px;overflow:auto">DELETE (dry run, mock):\n epoch_001.pt … epoch_020.pt  (~180 MB)\nKEEP: epoch_022/023/024.pt + best.pt\ntrash retained 7 days</pre>'};
+  document.addEventListener('click',e=>{
+    const b=e.target.closest('[data-diff]');if(!b)return;
+    const t=b.dataset.diff==='rev-lr'?'Diff · LR schedule fix':b.dataset.diff==='rev-aug'?'Diff · RandAugment sweep':'Deletion list · checkpoint prune';
+    const shade=document.createElement('div');shade.className='modal-shade';
+    shade.innerHTML=`<section class="modal" role="dialog" aria-modal="true" aria-label="${t}"><div class="section-head"><h2>${t}</h2><button class="btn icon-btn" aria-label="Close">✕</button></div><p class="mb">Mock diff · vision-lab · read-only, nothing applied.</p>${diffs[b.dataset.diff]||''}</section>`;
+    document.body.append(shade);
+    shade.addEventListener('click',ev=>{if(ev.target===shade||ev.target.closest('.btn'))shade.remove();});
+  });
+  $('#exportBtn').addEventListener('click',()=>{
+    const lines=['# vision-lab — review ledger (mock)',...[...$('#ledger').children].map(li=>`- ${li.querySelector('time').textContent} ${li.textContent.trim()}`)];
+    const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([lines.join('\n')],{type:'text/markdown'}));a.download='review-ledger-mock.md';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),800);
+  });
+  refresh();
+})();
+</script>
+</body>
+</html>

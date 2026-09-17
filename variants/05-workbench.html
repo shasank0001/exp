@@ -1,0 +1,614 @@
+<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Workbench — ML Copilot</title><link rel="stylesheet" href="shared.css"><style>
+/* ---------- graphite dark IDE theme (variant-local overrides) ---------- */
+:root{--bg:#131519;--panel:#191c22;--editor:#15181d;--text:#c9cfda;--muted:#79818f;--line:#262b33;--accent:#e0af68;--tint:#21252d;--green:#9ece6a;--red:#f7768e;--blue:#7aa2f7;--purple:#bb9af7;--cyan:#2ac3de;--orange:#ff9e64;--com:#5c6370}
+html,body{height:100%}
+body{display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+::selection{background:#e0af6833}
+*::-webkit-scrollbar{width:10px;height:10px}
+*::-webkit-scrollbar-thumb{background:#2c313a;border-radius:6px;border:2px solid var(--bg)}
+*{scrollbar-width:thin;scrollbar-color:#2c313a transparent}
+h1,h2,h3{letter-spacing:-.2px}
+/* top bar */
+.topbar{height:46px;flex-shrink:0;display:flex;align-items:center;gap:12px;padding:0 13px;background:var(--panel);border-bottom:1px solid var(--line)}
+.topbar .mark{background:var(--accent);color:#16181d}
+.crumb-path{font-size:11px;color:var(--muted)}
+.crumb-path b{color:var(--text);font-weight:550}
+.omnibox{flex:1;max-width:430px;height:27px;display:flex;align-items:center;gap:8px;padding:0 9px;border:1px solid var(--line);border-radius:6px;background:var(--editor);color:var(--muted);font-size:10.5px}
+.omnibox .kbd{margin-left:auto}
+.top-actions{margin-left:auto;display:flex;align-items:center;gap:8px}
+/* activity rail */
+.main{flex:1;display:flex;min-height:0}
+.rail{width:46px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:4px;padding:9px 0;background:var(--panel);border-right:1px solid var(--line)}
+.rail-btn{width:33px;height:33px;display:grid;place-items:center;border:0;border-radius:8px;background:transparent;color:var(--muted)}
+.rail-btn:hover{background:var(--tint);color:var(--text)}
+.rail-btn.active{background:var(--tint);color:var(--accent)}
+.rail-btn .icon{width:18px;height:18px}
+.rail .spacer{flex:1}
+/* explorer */
+.side{width:190px;flex-shrink:0;overflow:auto;padding:12px 8px;background:var(--panel);border-right:1px solid var(--line)}
+.tree-row{width:calc(100% - 8px);display:flex;align-items:center;gap:8px;padding:5px 8px;border:0;border-radius:6px;background:transparent;text-align:left;font:11px var(--mono);color:var(--muted)}
+.tree-row:hover{background:var(--tint);color:var(--text)}
+.tree-row.sel{background:var(--tint);color:var(--text)}
+.tree-row .icon{width:13px;height:13px;flex-shrink:0}
+.tree-row .mod{margin-left:auto;color:var(--accent);font-size:9px}
+.tree-dir{color:var(--text);font-weight:550;font-family:'DM Sans',sans-serif;font-size:11px}
+/* editor column */
+.editor{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--editor)}
+.tabs{height:36px;flex-shrink:0;display:flex;align-items:stretch;background:var(--panel);border-bottom:1px solid var(--line);overflow-x:auto}
+.tab{display:flex;align-items:center;gap:8px;padding:0 14px;border:0;border-right:1px solid var(--line);border-top:2px solid transparent;background:transparent;color:var(--muted);font:11.5px var(--mono);white-space:nowrap}
+.tab:hover{color:var(--text)}
+.tab.active{background:var(--editor);color:var(--text);border-top-color:var(--accent)}
+.tab .mod{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.tabs .edge{flex:1;border-bottom:1px solid var(--line)}
+.crumb{height:30px;flex-shrink:0;display:flex;align-items:center;gap:7px;padding:0 14px;border-bottom:1px solid var(--line);font-size:10.5px;color:var(--muted);background:var(--editor)}
+.crumb .icon{width:12px;height:12px}
+.crumb-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.diff-toggle{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border:1px solid var(--line);border-radius:6px;background:transparent;color:var(--muted);font-size:10px;font-weight:550}
+.diff-btn b{background:var(--accent);color:#16181d;border-radius:4px;font-size:9px;padding:0 5px;line-height:15px}
+.diff-btn[aria-pressed="true"]{background:color-mix(in srgb,var(--accent) 14%,transparent);border-color:var(--accent);color:var(--accent)}
+.code-wrap{flex:1;overflow:auto;position:relative;cursor:text}
+.lines{min-width:660px;padding:10px 0 48px;font:12.5px/1.85 var(--mono)}
+.cl{display:flex;align-items:baseline;white-space:pre;padding-right:20px}
+.cl:hover{background:#ffffff05}
+.cl.active{background:#ffffff09;box-shadow:inset 2px 0 0 var(--accent)}
+.gut{width:54px;flex-shrink:0;padding-right:15px;text-align:right;color:#4a5160;font-size:10.5px;user-select:none}
+.gut .s{display:none}
+.src{color:var(--text)}
+/* inline diff states */
+.lines .cl.del{background:#f7768e14}
+.lines .cl.del .src{color:#e8aab3}
+.lines .cl.del .gut{color:var(--red)}
+.lines .cl.add{display:none;background:#9ece6a15}
+.lines .cl.add .src{color:#c4e3a4}
+.lines .cl.add .gut{color:var(--green)}
+.lines.diff-on .gut .n{display:none}
+.lines.diff-on .gut .s{display:inline}
+.lines.diff-on .cl.add{display:flex}
+.cl.flash{animation:flash 1.2s ease 1}
+@keyframes flash{0%,55%{box-shadow:inset 0 0 0 999px #e0af6826}100%{box-shadow:inset 0 0 0 999px transparent}}
+/* syntax palette */
+.t-kw{color:var(--purple)}.t-str{color:var(--green)}.t-num{color:var(--orange)}.t-com{color:var(--com);font-style:italic}
+.t-fn{color:var(--blue)}.t-cls{color:var(--cyan)}.t-dec{color:var(--accent)}
+.t-self{color:var(--red);font-style:italic}.t-key{color:var(--blue)}
+/* agent panel */
+.agent{width:332px;flex-shrink:0;display:flex;flex-direction:column;background:var(--panel);border-left:1px solid var(--line)}
+.agent-head{padding:13px 16px;border-bottom:1px solid var(--line)}
+.agent-scroll{flex:1;overflow-y:auto;padding:4px 16px 10px}
+.agent-foot{padding:11px 16px 13px;border-top:1px solid var(--line)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px}
+.chip{padding:3px 9px;border:1px solid var(--line);border-radius:20px;background:transparent;color:var(--muted);font-size:10px}
+.chip:hover{background:var(--tint);color:var(--text)}
+.agent .composer{background:#1d212a;border-color:#2c323c;box-shadow:0 3px 14px #00000059}
+.agent .composer textarea{color:var(--text)}
+.agent .composer-meta{color:var(--muted)}
+.proposal{border:1px solid #34435a;background:#1c212b;border-radius:10px;padding:13px 14px;margin:14px 0}
+.proposal.approved{border-color:color-mix(in srgb,var(--green) 45%,var(--line))}
+.proposal.dismissed{opacity:.55}
+.proposal .filechip{display:inline-flex;align-items:center;gap:6px;font:10px var(--mono);color:var(--accent);background:#e0af6816;border:1px solid #e0af6833;border-radius:5px;padding:2px 7px}
+.diffbox{font:10.5px/1.7 var(--mono);border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:10px 0;background:var(--editor)}
+.dl{display:flex;gap:9px;padding:1px 10px;white-space:pre-wrap;word-break:break-word}
+.dl .sign{width:9px;flex-shrink:0;user-select:none}
+.dl.ctx{color:var(--muted)}
+.dl.del{background:#f7768e12;color:#e4a8b2}.dl.del .sign{color:var(--red)}
+.dl.add{background:#9ece6a14;color:#c7e3a6}.dl.add .sign{color:var(--green)}
+.impact{display:flex;flex-wrap:wrap;gap:5px;margin:9px 0}
+.impact span{font-size:9.5px;padding:2px 7px;border:1px solid var(--line);border-radius:5px;color:var(--muted)}
+/* dock */
+.dock{height:206px;flex-shrink:0;display:flex;flex-direction:column;border-top:1px solid var(--line);background:var(--panel)}
+.dock-head{height:34px;flex-shrink:0;display:flex;align-items:center;gap:4px;padding:0 10px;border-bottom:1px solid var(--line)}
+.dock-tab{padding:4px 11px;border:0;border-radius:6px;background:transparent;color:var(--muted);font-size:10.5px;font-weight:550}
+.dock-tab.on{background:var(--tint);color:var(--text)}
+.dock-head .right{margin-left:auto;display:flex;align-items:center;gap:7px}
+.dock-head .btn{padding:3px 9px;font-size:10px;border-radius:6px}
+.dock-head .btn .icon{width:13px;height:13px}
+.dock-body{flex:1;display:flex;min-height:0}
+.pane{flex:1;min-width:0;display:none}
+.pane.on{display:flex}
+.chart-pane{flex-direction:column;padding:10px 18px 8px;gap:2px}
+.chart-pane .spread{flex-shrink:0}
+.chart-pane [data-chart]{flex:1;min-height:0;display:flex}.dock .chart{height:100%;width:100%;flex:1;min-height:0}.agent .chat-message{gap:8px}.agent .chat-message .avatar{width:22px;height:22px}.proposal .spread{flex-wrap:wrap}.proposal .row{flex-wrap:wrap}.agent-scroll>.chat-message:nth-child(2){display:block}.agent-scroll>.chat-message:nth-child(2)>.avatar{display:none}.composer .composer-meta{font-size:8px}.tree-row{max-width:calc(100% - 14px)}
+.console-pane{flex-direction:column;overflow:auto;padding:9px 18px;font:11px/1.85 var(--mono);color:#96a0af}
+.console-pane .ct{color:#59626f}
+.console-pane .cg{color:var(--green)}.console-pane .co{color:var(--orange)}.console-pane .cb{color:var(--blue)}
+.dock-metrics{width:238px;flex-shrink:0;border-left:1px solid var(--line);padding:10px 16px;display:flex;flex-direction:column;gap:9px;overflow:auto}
+.dock-metrics .metric strong{font-size:17px;letter-spacing:-.4px}
+.dock-metrics .metric label{font-size:9px}
+.mini-track{height:4px;border-radius:4px;background:var(--line);overflow:hidden;margin-top:3px}
+.mini-track span{display:block;height:100%;border-radius:4px;background:var(--accent)}
+.dock-metrics .row2{display:flex;gap:18px}
+/* status bar */
+.status{height:25px;flex-shrink:0;display:flex;align-items:center;gap:15px;padding:0 12px;background:#0e1013;border-top:1px solid var(--line);font:10px var(--mono);color:var(--muted);white-space:nowrap;overflow:hidden}
+.status .icon{width:11px;height:11px}
+.status .right{margin-left:auto;display:flex;gap:15px}
+/* responsive: 1300 → 700 */
+@media(max-width:1150px){.side{display:none}}
+@media(max-width:1020px){.omnibox{display:none}.agent{width:300px}}
+@media(max-width:900px){.dock-metrics{display:none}.agent{width:280px}.dock{height:188px}}
+@media(max-width:760px){
+ body{overflow:auto;height:auto;min-height:100vh}
+ .main{flex-direction:column;overflow:visible}
+ .rail{display:none}
+ .editor{min-height:470px;border-bottom:1px solid var(--line)}
+ .agent{width:auto;max-height:540px;border-left:0}
+ .dock{height:auto}
+ .dock-body{flex-direction:column}
+ .chart-pane{height:190px}
+ .console-pane{max-height:170px}
+ .status .mid{display:none}
+}
+</style></head><body>
+
+<header class="topbar">
+  <span class="mark">m/</span>
+  <span class="app-title">ML Copilot</span>
+  <span class="crumb-path">/ <b>vision-lab</b> / workbench</span>
+  <div class="omnibox" role="presentation"><span data-icon="search"></span>Search files, runs, threads<span class="kbd">⌘K</span></div>
+  <div class="top-actions">
+    <button class="btn" data-action="environment" title="Simulated environment report"><span data-icon="cpu"></span> RTX 4090</button>
+    <span class="tag">mock preview</span>
+  </div>
+</header>
+
+<div class="main">
+  <nav class="rail" aria-label="Activity bar">
+    <button class="rail-btn active" id="rail-explorer" aria-label="Toggle explorer" title="Explorer"><span data-icon="folder"></span></button>
+    <button class="rail-btn" id="rail-search" aria-label="Search is not wired in this preview" title="Search"><span data-icon="search"></span></button>
+    <button class="rail-btn" data-action="settings" aria-label="Workspace settings" title="Source control · main"><span data-icon="branch"></span></button>
+    <span class="spacer"></span>
+    <span class="avatar" title="SK · mock user">SK</span>
+  </nav>
+
+  <aside class="side" id="side">
+    <div class="eyebrow" style="padding:0 8px 8px">EXPLORER · vision-lab</div>
+    <div class="tree-row tree-dir"><span data-icon="folder"></span> src</div>
+    <button class="tree-row sel" style="margin-left:14px" data-tab-btn="train.py"><span data-icon="file"></span> train.py<span class="mod">M</span></button>
+    <button class="tree-row" style="margin-left:14px" data-tab-btn="model.py">model.py</button>
+    <button class="tree-row" style="margin-left:14px" data-tab-btn="data.py">data.py</button>
+    <div class="tree-row" style="margin-left:14px;opacity:.55">engine.py</div>
+    <div class="tree-row tree-dir" style="margin-top:8px"><span data-icon="folder"></span> configs</div>
+    <button class="tree-row" style="margin-left:14px" data-tab-btn="baseline.yaml">baseline.yaml</button>
+    <div class="tree-row tree-dir" style="margin-top:8px"><span data-icon="folder"></span> checkpoints</div>
+    <button class="tree-row" style="margin-left:14px" data-action="checkpoint">epoch_024.pt</button>
+    <div class="tree-row" style="margin-top:8px;opacity:.55"><span data-icon="book"></span> README.md</div>
+    <div class="note" style="margin:14px 4px 0;font-size:9.5px">Mock file tree. Open files are simulated read-only excerpts.</div>
+  </aside>
+
+  <section class="editor" aria-label="Code editor">
+    <div class="tabs" role="tablist" aria-label="Open files">
+      <button class="tab active" role="tab" aria-selected="true" data-tab="train.py"><span data-icon="file"></span> train.py<span class="mod" title="Unsaved suggested change"></span></button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="model.py"><span data-icon="file"></span> model.py</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="data.py"><span data-icon="file"></span> data.py</button>
+      <button class="tab" role="tab" aria-selected="false" data-tab="baseline.yaml"><span data-icon="settings"></span> baseline.yaml</button>
+      <span class="edge"></span>
+    </div>
+    <div class="crumb">
+      <span data-icon="branch"></span> main* <span style="opacity:.5">·</span> vision-lab / src / <b id="crumbFile" style="color:var(--text);font-weight:550">train.py</b>
+      <div class="crumb-right">
+        <button class="diff-btn diff-toggle" id="diffBtn" aria-pressed="false" title="Show the agent’s suggested edit inline">Review change <b>1</b></button>
+        <span style="opacity:.6">Python 3.11.9</span>
+      </div>
+    </div>
+    <div class="code-wrap" id="codeScroll"><div class="lines" id="lines"></div></div>
+  </section>
+
+  <aside class="agent" aria-label="Agent panel">
+    <div class="agent-head spread">
+      <div class="row"><span class="avatar agent-avatar">m</span><div><h3>ML Copilot</h3><span class="muted" style="font-size:10px">Thread · “Improve run #024”</span></div></div>
+      <button class="btn icon-btn" data-action="new" aria-label="New research thread"><span data-icon="plus"></span></button>
+    </div>
+    <div class="agent-scroll">
+      <div class="chat-message">
+        <div class="avatar">SK</div>
+        <div class="content"><div class="byline">You <span>2 min ago</span></div>
+        <p>Val accuracy has been flat near 87.4% for three epochs. Anything worth changing before I launch run #025?</p></div>
+      </div>
+      <div class="chat-message">
+        <div class="avatar agent-avatar">m</div>
+        <div class="content"><div class="byline">ML Copilot <span>simulated response</span></div>
+        <p>Let this baseline finish first. For run #025, I suggest one controlled change: <strong>label smoothing at 0.1</strong>. Keep the split, seed, and cosine schedule unchanged so we can isolate its effect.</p>
+        <div class="proposal" id="proposal" data-proposal>
+          <div class="spread"><span class="filechip"><span data-icon="file"></span> train.py · lines 23–26</span><span class="eyebrow">SUGGESTED EDIT</span></div>
+          <div class="diffbox" role="figure" aria-label="Proposed diff for train.py">
+            <div class="dl ctx">@@ train.py : 26 @@</div>
+            <div class="dl del"><span class="sign">-</span>  criterion = nn.CrossEntropyLoss(label_smoothing=0.0)</div>
+            <div class="dl add"><span class="sign">+</span>  criterion = nn.CrossEntropyLoss(label_smoothing=0.1)</div>
+          </div>
+          <div class="impact"><span>1 line changed</span><span>seed 42 kept</span><span>effect not measured</span></div>
+          <div class="row" style="gap:7px">
+            <button class="btn primary" data-action="approve"><span data-icon="check"></span> Approve</button>
+            <button class="btn" data-action="reject">Dismiss</button>
+            <button class="btn quiet" id="gotoDiff" style="margin-left:auto">View in editor</button>
+          </div>
+          <div class="row mt12" style="gap:6px"><span class="check" data-icon="check"></span><span class="small muted" data-approval>Awaiting your review · preview only, nothing is applied</span></div>
+        </div>
+        <p style="font-size:11px;color:var(--muted)">Approval saves a proposed experiment, not a live training change. Compare held-out accuracy after both runs finish.</p><button class="btn quiet mt12" data-file="baseline.yaml">Inspect baseline.yaml ↗</button></div>
+      </div>
+      <div data-messages></div>
+    </div>
+    <div class="agent-foot">
+      <div class="chips">
+        <button class="chip" data-prompt="Explain this diff line by line">Explain the diff</button>
+        <button class="chip" data-prompt="Will label smoothing hurt accuracy on CIFAR-10?">Overfitting risk?</button>
+        <button class="chip" data-prompt="How much GPU memory is the run using right now?">GPU memory?</button>
+      </div>
+      <div data-composer="Ask about the diff, the run, or the code…"></div>
+    </div>
+  </aside>
+</div>
+
+<section class="dock" aria-label="Run dock">
+  <div class="dock-head">
+    <button class="dock-tab on" data-pane="charts">Charts</button>
+    <button class="dock-tab" data-pane="console">Console</button>
+    <span class="right">
+      <span class="pill green" data-run-status><span class="dot"></span> Running</span>
+      <button class="btn" data-action="pause"><span data-icon="pause"></span> Pause</button>
+      <button class="btn" data-action="logs"><span data-icon="terminal"></span> Logs</button>
+      <button class="btn" data-action="checkpoint"><span data-icon="file"></span> epoch_024.pt</button>
+    </span>
+  </div>
+  <div class="dock-body">
+    <div class="pane chart-pane on" data-pane-id="charts">
+      <div class="spread">
+        <span class="eyebrow">LOSS · RUN #024 · EPOCHS 0–24</span>
+        <span class="legend"><span><i></i>train</span><span><i class="val"></i>validation</span></span>
+      </div>
+      <div data-chart></div>
+    </div>
+    <div class="pane console-pane" data-pane-id="console">
+      <div><span class="ct">[09:41:02]</span> Loading CIFAR-10 · 45,000 train / 5,000 val samples</div>
+      <div><span class="ct">[09:41:04]</span> ResNet-18 · <span class="co">11.2M</span> params · seed <span class="co">42</span></div>
+      <div><span class="ct">[09:41:05]</span> CUDA device 0 · RTX 4090 · driver 550.54</div>
+      <div><span class="ct">[09:41:06]</span> TensorBoard writer → runs/exp_024</div>
+      <div><span class="ct">[09:55:41]</span> epoch 23/100 · train_loss <span class="co">0.231</span> · lr <span class="cb">0.091</span></div>
+      <div><span class="ct">[09:56:18]</span> epoch 24/100 · train_loss <span class="co">0.218</span> · lr <span class="cb">0.087</span></div>
+      <div><span class="ct">[09:56:18]</span> val_loss <span class="co">0.392</span> · val_acc <span class="cg">87.42%</span> · best ✓</div>
+      <div><span class="ct">[09:56:19]</span> checkpoint saved → checkpoints/epoch_024.pt (44.8 MB)</div>
+      <div><span class="ct">[09:56:19]</span> no NaN/Inf observed · simulated stream, no real process</div>
+    </div>
+    <div class="dock-metrics">
+      <div class="spread"><span class="eyebrow">RUN #024</span><span class="small" style="color:var(--green)">+0.31 last epoch</span></div>
+      <div class="row" style="justify-content:space-between;font-size:10.5px"><span class="muted">Epoch</span><span class="mono">24 / 100</span></div>
+      <div class="mini-track"><span style="width:24%"></span></div>
+      <div class="row2" style="margin-top:4px">
+        <div class="metric"><label>Val acc</label><strong>87.42%</strong></div>
+        <div class="metric"><label>Train loss</label><strong>0.218</strong></div>
+        <div class="metric"><label>Val loss</label><strong>0.392</strong></div>
+      </div>
+      <div style="margin-top:2px">
+        <div class="row" style="justify-content:space-between;font-size:10px"><span class="muted">VRAM · RTX 4090</span><span class="mono">8.4 / 24 GB</span></div>
+        <div class="mini-track"><span style="width:35%;background:var(--blue)"></span></div>
+        <div class="row" style="justify-content:space-between;font-size:10px;margin-top:6px"><span class="muted">GPU util</span><span class="mono">92%</span></div>
+        <div class="mini-track"><span style="width:92%;background:var(--green)"></span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="status">
+  <span class="row" style="gap:5px"><span data-icon="branch"></span> main*</span>
+  <span>✓ no syntax errors</span>
+  <span class="mid">CIFAR-10 · ResNet-18 · PyTorch 2.4.1+cu121 · CUDA 12.1</span>
+  <span class="right">
+    <span id="pos">Ln 23, Col 31</span><span>UTF-8</span><span>RTX 4090</span><span style="color:var(--accent)">mock session — nothing runs</span>
+  </span>
+</footer>
+
+<!-- mock source excerpts, rendered into the editor by the inline script below -->
+<script type="text/plain" data-src="train.py">
+# CIFAR-10 · ResNet-18 baseline · run #024
+# Mock excerpt for the ML Copilot workbench preview
+import torch
+import torch.nn as nn
+
+from model import resnet18
+from data import train_loader, val_loader
+from engine import train_epoch, evaluate
+
+
+def main(cfg) -> None:
+    torch.manual_seed(cfg.seed)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    model = resnet18(num_classes=10).to(device)
+    optimizer = torch.optim.SGD(
+        model.parameters(),
+        lr=0.1,
+        momentum=0.9,
+        weight_decay=5e-4,
+        nesterov=True,
+    )
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=cfg.epochs
+    )
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.0)
+
+    scaler = torch.amp.GradScaler(enabled=cfg.amp)
+    best_acc = 0.0
+
+    for epoch in range(cfg.start_epoch, cfg.epochs):
+        train_loss = train_epoch(model, train_loader, optimizer, scaler)
+        val_loss, val_acc = evaluate(model, val_loader)
+        scheduler.step()
+
+        if val_acc > best_acc:
+            best_acc = val_acc
+            save_checkpoint(model, epoch, name="best")
+
+    print(f"best accuracy {best_acc:.2%}")
+
+
+if __name__ == "__main__":
+    main(load_config("baseline.yaml"))
+</script>
+
+<script type="text/plain" data-src="model.py">
+# ResNet-18 adapted for 32×32 inputs · mock excerpt
+import torch
+import torch.nn as nn
+
+
+class BasicBlock(nn.Module):
+    """Two 3×3 convs with a residual shortcut."""
+
+    expansion = 1
+
+    def __init__(self, in_planes, planes, stride=1):
+        super().__init__()
+        self.conv1 = nn.Conv2d(
+            in_planes, planes, kernel_size=3,
+            stride=stride, padding=1, bias=False,
+        )
+        self.bn1 = nn.BatchNorm2d(planes)
+        self.conv2 = nn.Conv2d(
+            planes, planes, kernel_size=3,
+            stride=1, padding=1, bias=False,
+        )
+        self.bn2 = nn.BatchNorm2d(planes)
+        self.shortcut = nn.Sequential()
+
+    def forward(self, x):
+        out = torch.relu(self.bn1(self.conv1(x)))
+        out = self.bn2(self.conv2(out))
+        out += self.shortcut(x)
+        return torch.relu(out)
+
+
+class ResNet(nn.Module):
+    def __init__(self, block, num_blocks, num_classes=10):
+        super().__init__()
+        self.in_planes = 64
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=3,
+                               stride=1, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(64)
+        self.layer1 = self._make_layer(block, 64, num_blocks[0], 1)
+        self.layer2 = self._make_layer(block, 128, num_blocks[1], 2)
+        self.layer3 = self._make_layer(block, 256, num_blocks[2], 2)
+        self.layer4 = self._make_layer(block, 512, num_blocks[3], 2)
+        self.linear = nn.Linear(512 * block.expansion, num_classes)
+
+    def _make_layer(self, block, planes, blocks, stride):
+        strides = [stride] + [1] * (blocks - 1)
+        layers = []
+        for s in strides:
+            layers.append(block(self.in_planes, planes, s))
+            self.in_planes = planes * block.expansion
+        return nn.Sequential(*layers)
+
+
+def resnet18(num_classes=10):
+    return ResNet(BasicBlock, [2, 2, 2, 2], num_classes=num_classes)
+</script>
+
+<script type="text/plain" data-src="data.py">
+# CIFAR-10 loaders · mock excerpt
+from torch.utils.data import DataLoader
+from torchvision import datasets, transforms
+
+CIFAR_MEAN = [0.4914, 0.4822, 0.4465]
+CIFAR_STD = [0.2470, 0.2435, 0.2616]
+
+train_transform = transforms.Compose([
+    transforms.RandomCrop(32, padding=4),
+    transforms.RandomHorizontalFlip(),
+    transforms.ToTensor(),
+    transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
+])
+
+val_transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
+])
+
+train_set = datasets.CIFAR10(
+    root="data", train=True, download=True,
+    transform=train_transform,
+)
+val_set = datasets.CIFAR10(
+    root="data", train=True, download=False,
+    transform=val_transform,
+)
+
+# Fixed indices shared across transforms; test set stays untouched.
+# train_idx (45k) and val_idx (5k) come from the seed-42 split.
+from torch.utils.data import Subset
+train_set = Subset(train_set, train_idx)
+val_set = Subset(val_set, val_idx)
+
+train_loader = DataLoader(
+    train_set, batch_size=128, shuffle=True,
+    num_workers=4, pin_memory=True, drop_last=True,
+)
+val_loader = DataLoader(
+    val_set, batch_size=256, shuffle=False,
+    num_workers=2, pin_memory=True,
+)
+</script>
+
+<script type="text/plain" data-src="baseline.yaml">
+# Reproducible baseline · seed locked · mock config
+model: resnet18
+dataset: cifar10
+seed: 42
+
+epochs: 100
+batch_size: 128
+workers: 4
+precision: fp32        # try amp next run
+
+optimizer:
+  name: sgd
+  lr: 0.1
+  momentum: 0.9
+  weight_decay: 5.0e-4
+  nesterov: true
+
+scheduler:
+  name: cosine
+  t_max: 100
+
+criterion:
+  label_smoothing: 0.0
+
+logging:
+  tensorboard: runs/exp_024
+  checkpoint_every: 5
+</script>
+
+<script src="shared.js"></script>
+<script>
+/* ---------- variant logic: editor, tabs, inline diff, dock ---------- */
+(function(){
+  const KW=new Set(['import','from','def','class','return','if','else','elif','for','in','while','with','as','not','and','or','is','None','True','False','lambda','try','except','finally','pass','raise','yield','global','assert','break','continue','super','self','print','async','await']);
+  const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  function hl(line){
+    // comments & decorators first
+    if(/^\s*#/.test(line))return'<span class="t-com">'+esc(line)+'</span>';
+    if(/^\s*@/.test(line))return'<span class="t-dec">'+esc(line)+'</span>';
+    let out='',i=0;const n=line.length;
+    while(i<n){
+      const c=line[i];
+      if(c==='"'||c==="'"){let j=i+1;while(j<n&&line[j]!==c)j++;out+='<span class="t-str">'+esc(line.slice(i,Math.min(j+1,n)))+'</span>';i=j+1;continue}
+      if(/[A-Za-z_]/.test(c)){let j=i;while(j<n&&/[A-Za-z0-9_]/.test(line[j]))j++;const w=line.slice(i,j),nx=line[j];
+        let cls='';
+        if(KW.has(w))cls='t-kw';else if(nx==='(')cls='t-fn';else if(/^[A-Z]/.test(w))cls='t-cls';
+        else if(w==='self')cls='t-self';
+        out+=cls?'<span class="'+cls+'">'+w+'</span>':w;i=j;continue}
+      if(/[0-9]/.test(c)){let j=i;while(j<n&&/[0-9.eE+\-xXa-fA-F_]/.test(line[j]))j++;out+='<span class="t-num">'+esc(line.slice(i,j))+'</span>';i=j;continue}
+      out+=esc(c);i++;
+    }
+    return out;
+  }
+  function hlYaml(line){
+    if(/^\s*#/.test(line))return'<span class="t-com">'+esc(line)+'</span>';
+    const m=line.match(/^(\s*)([\w.]+)(:)(.*)$/);
+    if(m)return esc(m[1])+'<span class="t-key">'+esc(m[2])+'</span><span class="t-com">'+esc(m[3])+'</span><span class="t-num">'+esc(m[4])+'</span>';
+    return'<span class="t-num">'+esc(line)+'</span>';
+  }
+  let diffOn=false;
+  const diffBtn=document.getElementById('diffBtn');
+  const linesEl=document.getElementById('lines'),wrapEl=document.getElementById('codeScroll');
+  const crumb=document.getElementById('crumbFile'),posEl=document.getElementById('pos');
+  const tabs=[...document.querySelectorAll('[data-tab]')];
+  const treeBtns=[...document.querySelectorAll('[data-tab-btn]')];
+  let current='train.py';
+  function render(name){
+    const src=(document.querySelector('script[data-src="'+CSS.escape(name)+'"]')||{}).textContent||'# file not in preview';
+    const isYaml=name.endsWith('.yaml');
+    const rows=src.replace(/^\n|\n+$/g,'').split('\n').map((t,i)=>'<div class="cl" data-ln="'+(i+1)+'"><span class="gut"><span class="n">'+(i+1)+'</span><span class="s">&nbsp;</span></span><span class="src">'+(isYaml?hlYaml(t):hl(t))+'</span></div>').join('');
+    linesEl.innerHTML=rows;
+    linesEl.classList.remove('diff-on');
+    crumb.textContent=name;
+    tabs.forEach(t=>{const on=t.dataset.tab===name;t.classList.toggle('active',on);t.setAttribute('aria-selected',on)});
+    treeBtns.forEach(b=>b.classList.toggle('sel',b.dataset.tabBtn===name));
+    current=name;
+    diffOn=false;
+    diffBtn.setAttribute('aria-pressed','false');
+    diffBtn.innerHTML='Review change <b>1</b>';
+    wrapEl.scrollTop=0;
+    posEl.textContent='Ln 1, Col 1';
+  }
+  /* tab + explorer switching */
+  tabs.forEach(t=>t.addEventListener('click',()=>render(t.dataset.tab)));
+  treeBtns.forEach(b=>b.addEventListener('click',()=>{if(b.dataset.tabBtn)render(b.dataset.tabBtn)}));
+  render('train.py');
+
+  /* Render actual old/new lines, without editing any project files. */
+  function applyDiff(){
+    linesEl.querySelectorAll('.cl.add').forEach(row=>row.remove());
+    linesEl.querySelectorAll('.cl.del').forEach(row=>{row.classList.remove('del');row.style.display='';});
+    const row=linesEl.querySelector('.cl[data-ln="26"]');
+    if(diffOn&&current==='train.py'&&row){
+      row.classList.add('del');
+      row.querySelector('.s').textContent='−';
+      const added=row.cloneNode(true);
+      added.classList.replace('del','add');
+      added.querySelector('.s').textContent='+';
+      added.querySelector('.src').innerHTML=hl('    criterion = nn.CrossEntropyLoss(label_smoothing=0.1)');
+      row.after(added);
+    }
+    linesEl.classList.toggle('diff-on',diffOn);
+  }
+  function setDiff(on,scroll){
+    if(on&&current!=='train.py')render('train.py');
+    diffOn=on;
+    diffBtn.setAttribute('aria-pressed',String(on));
+    diffBtn.innerHTML=(on?'Hide change':'Review change')+' <b>1</b>';
+    applyDiff();
+    if(on&&scroll){
+      const row=linesEl.querySelector('.cl[data-ln="20"]');
+      if(row)row.scrollIntoView({behavior:'smooth',block:'center'});
+      row.classList.add('flash');setTimeout(()=>row.classList.remove('flash'),1300);
+    }
+  }
+  diffBtn.addEventListener('click',()=>setDiff(!diffOn,false));
+  document.getElementById('gotoDiff').addEventListener('click',()=>{
+    if(current!=='train.py')render('train.py');
+    setDiff(true,true);
+  });
+  // The source view remains read-only; all change review is simulated.
+
+  /* editor cursor affordance: click a line → status bar position */
+  linesEl.addEventListener('click',e=>{
+    const row=e.target.closest('.cl');if(!row)return;
+    linesEl.querySelectorAll('.cl.active').forEach(r=>r.classList.remove('active'));
+    row.classList.add('active');
+    posEl.textContent='Ln '+row.dataset.ln+', Col 31';
+  });
+
+  /* dock panes */
+  document.querySelectorAll('[data-pane]').forEach(btn=>btn.addEventListener('click',()=>{
+    document.querySelectorAll('[data-pane]').forEach(t=>t.classList.toggle('on',t===btn));
+    document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.dataset.paneId===btn.dataset.pane));
+  }));
+
+  /* rail explorer toggle */
+  const side=document.getElementById('side'),railEx=document.getElementById('rail-explorer');
+  railEx.addEventListener('click',()=>{
+    const hidden=side.style.display==='none';
+    side.style.display=hidden?'':'none';
+    railEx.classList.toggle('active',hidden);
+  });
+  document.getElementById('rail-search').addEventListener('click',()=>toast('Search is not part of this preview — try the file tabs instead.'));
+
+  /* sync approvals from shared.js into the editor diff */
+  document.addEventListener('click',e=>{
+    const a=e.target.closest('[data-action]');
+    if(!a)return;
+    if(a.dataset.action==='approve'){
+      if(!diffOn){setDiff(true,false)}
+      const p=document.getElementById('proposal');if(p)p.classList.add('approved');
+      document.querySelector('[data-action="reject"]').disabled=true;
+      document.querySelector('[data-approval]').textContent='Approved for next experiment · simulation only';
+    }
+    if(a.dataset.action==='reject'){
+      const p=document.getElementById('proposal');if(p)p.classList.add('dismissed');
+      if(diffOn)setDiff(false,false);
+      document.querySelector('[data-action="approve"]').disabled=true;
+      document.querySelector('[data-approval]').textContent='Dismissed · baseline unchanged';
+      diffBtn.innerHTML='Review dismissed change';
+    }
+  });
+})();
+</script>
+</body></html>
