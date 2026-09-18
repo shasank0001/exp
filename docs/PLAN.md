@@ -50,6 +50,11 @@ Training supervision, TensorBoard/GPU telemetry, dataset/checkpoint tools, multi
 ## Current checks
 
 - Node 22.23.2 and npm 10.9.8 available.
-- DISPLAY is set to :1; desktop launch still must be tested.
-- `pi` not on PATH at initial check.
-- Git origin: https://github.com/shasank0001/exp.git. No push authorized in this milestone.
+- DISPLAY is set to :1; `npm run test:desktop` passes in this environment.
+- Pi 0.73.1 pinned locally (`node_modules/.bin/pi`); `pi --mode rpc --no-session`
+  starts cleanly and `get_state` confirms no session persistence.
+- Unauthenticated `prompt` is rejected with a missing-API-key error; the adapter
+  surfaces this as `{ ok: false, errorType: 'auth' }`. `abort` succeeds; strict
+  LF JSONL framing parses with zero unparseable lines (`tests/pi-rpc-spike.cjs`,
+  `tests/pi-adapter.test.cjs`).
+- Git origin: https://github.com/shasank0001/exp.git.
