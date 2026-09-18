@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ML Copilot — Architecture</title>
+<style>
+:root{
+  --bg:#fbfaf8; --panel:#ffffff; --ink:#2e2b27; --muted:#8a8178; --line:#e7e0d5;
+  --accent:#9c563d; --accent-soft:#f3e7dd; --green:#5f7f66; --green-soft:#e6ece3;
+  --amber:#9a6b2f; --amber-soft:#f4e9d4; --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.7 -apple-system,'Segoe UI',Roboto,sans-serif}
+.wrap{max-width:960px;margin:0 auto;padding:0 28px 120px}
+header.hero{padding:84px 0 30px;border-bottom:2px solid var(--ink)}
+.eyebrow{font:11px var(--mono);letter-spacing:2px;color:var(--accent);text-transform:uppercase}
+h1{font-size:44px;line-height:1.1;letter-spacing:-1.5px;margin:14px 0 10px;font-weight:650}
+.hero p{font-size:17px;color:var(--muted);max-width:640px}
+nav.toc{position:sticky;top:0;background:#fbfaf8f2;backdrop-filter:blur(6px);border-bottom:1px solid var(--line);padding:12px 0;z-index:5;font-size:13px}
+nav.toc .wrap{padding-bottom:0;display:flex;gap:18px;flex-wrap:wrap}
+nav.toc a{color:var(--muted);text-decoration:none}
+nav.toc a:hover{color:var(--accent)}
+section{padding:56px 0 8px}
+h2{font-size:26px;letter-spacing:-.6px;margin:0 0 6px}
+h2 .n{font:12px var(--mono);color:var(--accent);vertical-align:middle;margin-right:10px;letter-spacing:1px}
+.sub{color:var(--muted);margin:0 0 26px;max-width:700px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:22px 24px;margin:16px 0}
+.card h3{margin:0 0 8px;font-size:16px}
+.card p{margin:8px 0}
+.mono{font-family:var(--mono);font-size:12.5px}
+.pill{display:inline-block;font:11px var(--mono);padding:2px 9px;border-radius:20px;border:1px solid var(--line);color:var(--muted);margin:2px 4px 2px 0}
+.pill.ok{color:var(--green);border-color:#c4d2c2;background:var(--green-soft)}
+.pill.warn{color:var(--amber);border-color:#dcc48f;background:var(--amber-soft)}
+.pill.acc{color:var(--accent);border-color:#d8b9a5;background:var(--accent-soft)}
+svg.diagram{width:100%;height:auto;display:block}
+svg.diagram text{font-family:var(--mono)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+table{width:100%;border-collapse:collapse;font-size:13px;margin:14px 0}
+th{text-align:left;font:11px var(--mono);letter-spacing:1px;color:var(--muted);text-transform:uppercase;padding:8px 10px;border-bottom:2px solid var(--ink)}
+td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+td:first-child{font-family:var(--mono);font-size:12px;white-space:nowrap}
+pre{background:#26241f;color:#e8e2d5;border-radius:10px;padding:18px 20px;font:12.5px/1.7 var(--mono);overflow:auto}
+code.inline{font:12.5px var(--mono);background:#efe9dd;padding:1px 6px;border-radius:5px}
+.flow{counter-reset:step}
+.flow li{list-style:none;position:relative;padding:0 0 22px 44px;margin:0}
+.flow li::before{counter-increment:step;content:counter(step);position:absolute;left:0;top:2px;width:26px;height:26px;border-radius:50%;background:var(--ink);color:#fff;font:12px/26px var(--mono);text-align:center}
+.flow li::after{content:'';position:absolute;left:13px;top:32px;bottom:0;width:1px;background:var(--line)}
+.flow li:last-child::after{display:none}
+.note{border-left:3px solid var(--amber);background:var(--amber-soft);padding:12px 18px;border-radius:0 8px 8px 0;font-size:14px}
+.good{border-left:3px solid var(--green);background:var(--green-soft);padding:12px 18px;border-radius:0 8px 8px 0;font-size:14px}
+footer{margin-top:70px;padding-top:24px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+@media(max-width:640px){h1{font-size:32px}.grid2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<nav class="toc"><div class="wrap">
+<a href="#map">Map</a><a href="#renderer">Renderer</a><a href="#main">Main process</a><a href="#adapter">Pi adapter</a><a href="#runs">Runs</a><a href="#data">Data</a><a href="#trust">Trust</a><a href="#verify">Verification</a>
+</div></nav>
+<div class="wrap">
+<header class="hero">
+<div class="eyebrow">ML Copilot · System architecture · v0.3</div>
+<h1>One workspace,<br>three privilege zones.</h1>
+<p>A sandboxed UI that can only ask. A privileged main process that owns projects, threads, and processes. And a real coding agent — Pi — connected over a strict JSON protocol, with every byte of its activity recorded.</p>
+<div style="margin-top:16px">
+<span class="pill ok">20/20 unit tests</span><span class="pill ok">Live provider verified</span><span class="pill acc">Electron + React + Pi RPC</span><span class="pill">Linux first</span>
+</div>
+</header>
+
+<section id="map">
+<h2><span class="n">01</span>The map</h2>
+<p class="sub">Everything in the system lives in exactly one of three zones. Arrows show the only allowed directions of control.</p>
+<div class="card">
+<svg class="diagram" viewBox="0 0 900 430" role="img" aria-label="Layer diagram: sandboxed renderer calls the preload bridge; main process hosts threads, runs and Pi adapters; Pi talks to OpenRouter">
+<defs><marker id="ah" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="none" stroke="#9c563d" stroke-width="1.5"/></marker></defs>
+<rect x="20" y="20" width="860" height="130" rx="12" fill="#eef3ec" stroke="#c4d2c2"/>
+<text x="40" y="48" font-size="11" fill="#5f7f66" letter-spacing="2">ZONE 1 · SANDBOXED · NO NODE, NO FS, NO PROCESSES</text>
+<rect x="40" y="62" width="250" height="68" rx="8" fill="#fff" stroke="#c4d2c2"/>
+<text x="56" y="90" font-size="14" fill="#2e2b27">React renderer</text>
+<text x="56" y="110" font-size="11" fill="#8a8178">threads · chat · runs · diffs</text>
+<rect x="310" y="62" width="250" height="68" rx="8" fill="#fff" stroke="#c4d2c2"/>
+<text x="326" y="90" font-size="14" fill="#2e2b27">preload bridge</text>
+<text x="326" y="110" font-size="11" fill="#8a8178">window.mlcopilot · 20 methods</text>
+<rect x="600" y="62" width="260" height="68" rx="8" fill="#fff" stroke="#c4d2c2"/>
+<text x="616" y="90" font-size="14" fill="#2e2b27">mlcopilot:// + CSP</text>
+<text x="616" y="110" font-size="11" fill="#8a8178">allowlisted assets only</text>
+<rect x="20" y="170" width="860" height="130" rx="12" fill="#f6efe6" stroke="#d8b9a5"/>
+<text x="40" y="198" font-size="11" fill="#9c563d" letter-spacing="2">ZONE 2 · PRIVILEGED MAIN PROCESS · OWNS EVERYTHING LOCAL</text>
+<rect x="40" y="212" width="200" height="68" rx="8" fill="#fff" stroke="#d8b9a5"/>
+<text x="56" y="240" font-size="14" fill="#2e2b27">engine host</text>
+<text x="56" y="260" font-size="11" fill="#8a8178">threads · trust · diffs</text>
+<rect x="258" y="212" width="200" height="68" rx="8" fill="#fff" stroke="#d8b9a5"/>
+<text x="274" y="240" font-size="14" fill="#2e2b27">run manager</text>
+<text x="274" y="260" font-size="11" fill="#8a8178">1 process · group kill</text>
+<rect x="476" y="212" width="200" height="68" rx="8" fill="#fff" stroke="#d8b9a5"/>
+<text x="492" y="240" font-size="14" fill="#2e2b27">pi adapter × N</text>
+<text x="492" y="260" font-size="11" fill="#8a8178">1 process per thread</text>
+<rect x="694" y="212" width="166" height="68" rx="8" fill="#fff" stroke="#d8b9a5"/>
+<text x="710" y="240" font-size="14" fill="#2e2b27">records</text>
+<text x="710" y="260" font-size="11" fill="#8a8178">json · jsonl · logs</text>
+<rect x="20" y="320" width="860" height="90" rx="12" fill="#fff" stroke="#e7e0d5"/>
+<text x="40" y="348" font-size="11" fill="#8a8178" letter-spacing="2">ZONE 3 · EXTERNAL PROCESSES + PROVIDER</text>
+<rect x="40" y="358" width="250" height="36" rx="8" fill="#fbfaf8" stroke="#e7e0d5"/>
+<text x="56" y="381" font-size="12" fill="#2e2b27">pi --mode rpc (per thread)</text>
+<rect x="310" y="358" width="250" height="36" rx="8" fill="#fbfaf8" stroke="#e7e0d5"/>
+<text x="326" y="381" font-size="12" fill="#2e2b27">training run (single)</text>
+<rect x="600" y="358" width="260" height="36" rx="8" fill="#fbfaf8" stroke="#e7e0d5"/>
+<text x="616" y="381" font-size="12" fill="#2e2b27">OpenRouter → nex-mini</text>
+<line x1="450" y1="130" x2="450" y2="170" stroke="#9c563d" stroke-width="1.5" marker-end="url(#ah)"/>
+<text x="460" y="155" font-size="10" fill="#9c563d">invoke only</text>
+<line x1="576" y1="280" x2="576" y2="320" stroke="#9c563d" stroke-width="1.5" marker-end="url(#ah)"/>
+<text x="586" y="305" font-size="10" fill="#9c563d">stdio JSONL</text>
+<line x1="165" y1="280" x2="165" y2="320" stroke="#9c563d" stroke-width="1.5" marker-end="url(#ah)"/>
+<text x="175" y="305" font-size="10" fill="#9c563d">spawn</text>
+</svg>
+</div>
+<div class="good"><strong>Design rule:</strong> the renderer can never reach sideways into the filesystem, processes, or credentials. Every privileged act passes through a named, validated IPC method — and the agent itself can never launch runs or approve anything.</div>
+</section>
+
+<section id="renderer">
+<h2><span class="n">02</span>Sandboxed renderer</h2>
+<p class="sub">Vite + React 19 + TypeScript, built to static files. It renders threads, streams replies, and shows diffs, logs, and tool activity — all as text.</p>
+<div class="grid2">
+<div class="card"><h3>Can do</h3><p>Call the 20 bridge methods · subscribe to engine events · render text, charts of real data, and diffs · hold local UI state (panels, drafts, polling).</p></div>
+<div class="card"><h3>Cannot do</h3><p>No Node APIs · no <span class="code inline">fetch</span> · no dynamic code · no HTML rendering of agent output · sending blocked until project trust + engine availability.</p></div>
+</div>
+<div class="card"><h3>Panels</h3><p>
+<span class="pill">Sidebar — projects + threads</span><span class="pill">Conversation — streaming chat</span><span class="pill">Trust banner — disclosure gate</span><span class="pill">Tool activity — what the agent did</span><span class="pill">Changes — git diffs</span><span class="pill">Runs — launch · logs · stop</span><span class="pill">Context — project + engine</span>
+</p></div>
+</section>
+
+<section id="main">
+<h2><span class="n">03</span>Privileged main process</h2>
+<p class="sub">Electron main owns windows, the custom protocol, all IPC validation, the engine host, and shutdown. One instance only.</p>
+<ol class="flow">
+<li><strong>Isolated session.</strong> Dedicated partition, all permissions denied, downloads blocked, popups denied, navigation locked to the app entry.</li>
+<li><strong>Custom protocol.</strong> <span class="code inline">mlcopilot://app/…</span> serves only <span class="code inline">desktop/</span> + <span class="code inline">variants/</span> presentation assets with a strict Content-Security-Policy. Main and preload code are never servable.</li>
+<li><strong>Validated IPC.</strong> Every handler checks sender + main frame + exact entry URL. Thread ids match <span class="code inline">/^[A-Za-z0-9_-]{1,64}$/</span>; paths must be absolute existing directories.</li>
+<li><strong>Graceful shutdown.</strong> Re-entry guarded; run escalation (TERM → KILL → persisted) and adapter stops are awaited before exit.</li>
+</ol>
+<div class="card"><h3>Engine host (per app lifetime)</h3>
+<table><tr><th>Owns</th><th>Notes</th></tr>
+<tr><td>threads + messages</td><td>App-owned records; Pi session ids are annotations, never the source of truth</td></tr>
+<tr><td>adapters (1/thread)</td><td>Lazy start; evicted on crash or start failure; abort fences late events but keeps the session</td></tr>
+<tr><td>trust.json</td><td>Per project path, canonicalized, atomic writes, corruption quarantined</td></tr>
+<tr><td>tool-activity log</td><td>Bounded records, rotation, corrupt-line tolerant; feeds the touched-paths index</td></tr>
+<tr><td>change inspection</td><td>NUL-delimited porcelain, renames resolved, diff vs HEAD (staged included), non-repos get touched paths only</td></tr>
+</table></div>
+</section>
+
+<section id="adapter">
+<h2><span class="n">04</span>Pi adapter — the swappable seam</h2>
+<p class="sub">Spawns the pinned Pi binary in RPC mode and translates its protocol into the app's event kinds. This is the seam another engine (Codex, Claude) would plug into.</p>
+<div class="card">
+<svg class="diagram" viewBox="0 0 900 200" role="img" aria-label="Sequence: renderer sendPrompt, host persists user message, adapter prompt accepted, Pi streams deltas and tool events, agent-end finalizes, assistant message persisted, settled emitted">
+<line x1="120" y1="20" x2="120" y2="190" stroke="#e7e0d5"/><text x="120" y="14" font-size="11" fill="#8a8178" text-anchor="middle">UI</text>
+<line x1="330" y1="20" x2="330" y2="190" stroke="#e7e0d5"/><text x="330" y="14" font-size="11" fill="#8a8178" text-anchor="middle">HOST</text>
+<line x1="550" y1="20" x2="550" y2="190" stroke="#e7e0d5"/><text x="550" y="14" font-size="11" fill="#8a8178" text-anchor="middle">ADAPTER</text>
+<line x1="760" y1="20" x2="760" y2="190" stroke="#e7e0d5"/><text x="760" y="14" font-size="11" fill="#8a8178" text-anchor="middle">PI</text>
+<line x1="120" y1="40" x2="330" y2="40" stroke="#9c563d" stroke-width="1.5" marker-end="url(#ah)"/><text x="225" y="34" font-size="10" fill="#9c563d" text-anchor="middle">sendPrompt</text>
+<line x1="330" y1="65" x2="550" y2="65" stroke="#9c563d" stroke-width="1.5" marker-end="url(#ah)"/><text x="440" y="59" font-size="10" fill="#9c563d" text-anchor="middle">prompt (JSONL)</text>
+<line x1="550" y1="90" x2="760" y2="90" stroke="#9c563d" stroke-width="1.5" marker-end="url(#ah)"/><text x="655" y="84" font-size="10" fill="#9c563d" text-anchor="middle">stdin</text>
+<line x1="760" y1="115" x2="550" y2="115" stroke="#5f7f66" stroke-width="1.5" marker-end="url(#ah)"/><text x="655" y="109" font-size="10" fill="#5f7f66" text-anchor="middle">deltas · tools</text>
+<line x1="550" y1="140" x2="330" y2="140" stroke="#5f7f66" stroke-width="1.5" marker-end="url(#ah)"/><text x="440" y="134" font-size="10" fill="#5f7f66" text-anchor="middle">events</text>
+<line x1="330" y1="165" x2="120" y2="165" stroke="#5f7f66" stroke-width="1.5" marker-end="url(#ah)"/><text x="225" y="159" font-size="10" fill="#5f7f66" text-anchor="middle">message · settled</text>
+</svg>
+</div>
+<div class="card"><h3>Protocol facts (verified against Pi 0.73.1)</h3><p>
+<span class="pill ok">Strict LF JSONL framing</span><span class="pill ok">Request/response id correlation</span><span class="pill ok">prompt / abort / get_state</span><span class="pill ok">Auth failures classified</span><span class="pill warn">agent_settled unreliable → finalize on agent_end</span><span class="pill warn">Approval requests auto-declined, shown as error</span>
+</p><p>Sessions persist per thread via <span class="code inline">--session-dir</span>; HOME is inherited so Pi reads the user's real settings and auth. Model resolves from <span class="code inline">MLCOPILOT_MODEL</span> or Pi's configured default (OpenRouter <span class="code inline">nex-agi/nex-n2.5-mini:free</span>).</p></div>
+</section>
+
+<section id="runs">
+<h2><span class="n">05</span>Supervised runs</h2>
+<p class="sub">One owned local process at a time. Launched only by the UI button — the agent has no launch path.</p>
+<div class="card">
+<svg class="diagram" viewBox="0 0 900 120" role="img" aria-label="Run lifecycle: running to exited, killed, timeout, or failed">
+<rect x="20" y="30" width="140" height="46" rx="23" fill="#f4e9d4" stroke="#d8b9a5"/><text x="90" y="58" font-size="13" fill="#2e2b27" text-anchor="middle">running</text>
+<line x1="160" y1="53" x2="210" y2="53" stroke="#9c563d" stroke-width="1.5" marker-end="url(#ah)"/>
+<rect x="220" y="10" width="140" height="40" rx="8" fill="#eef3ec" stroke="#c4d2c2"/><text x="290" y="35" font-size="12" fill="#2e2b27" text-anchor="middle">exited (code)</text>
+<rect x="220" y="60" width="140" height="40" rx="8" fill="#eef3ec" stroke="#c4d2c2"/><text x="290" y="85" font-size="12" fill="#2e2b27" text-anchor="middle">killed (stop)</text>
+<rect x="400" y="10" width="150" height="40" rx="8" fill="#eef3ec" stroke="#c4d2c2"/><text x="475" y="35" font-size="12" fill="#2e2b27" text-anchor="middle">timeout (4h)</text>
+<rect x="400" y="60" width="150" height="40" rx="8" fill="#eef3ec" stroke="#c4d2c2"/><text x="475" y="85" font-size="12" fill="#2e2b27" text-anchor="middle">failed (spawn)</text>
+<rect x="600" y="20" width="280" height="70" rx="8" fill="#fff" stroke="#e7e0d5"/><text x="620" y="48" font-size="12" fill="#2e2b27">logs → records/runs/&lt;id&gt;.log</text><text x="620" y="68" font-size="12" fill="#2e2b27">meta → records/runs/&lt;id&gt;.json</text>
+</svg>
+</div>
+<div class="note"><strong>No sandbox is claimed.</strong> Runs execute as you with full privileges. Safety is structural: explicit launch, cwd forced to the thread's project, single-flight, 4-hour wall time, process-group kills that can never touch foreign processes, and an env allowlist (tuning vars only — PATH, LD_PRELOAD, HOME rejected).</div>
+</section>
+
+<section id="data">
+<h2><span class="n">06</span>Data on disk</h2>
+<p class="sub">All durable state lives under the OS user-data directory — never in the repo, never in the cloud.</p>
+<pre>~/.config/ml-copilot/            (Linux userData)
+├── records/
+│   ├── threads.json             # thread list (atomic writes, corruption → quarantined backup)
+│   ├── messages-&lt;thread&gt;.jsonl  # append-only transcript (bad lines skipped)
+│   ├── tools-&lt;thread&gt;.jsonl     # bounded tool-activity log with rotation
+│   ├── trust.json               # per-project trust (atomic, quarantined)
+│   └── runs/
+│       ├── &lt;runId&gt;.log          # captured stdout/stderr (8 MiB cap, tail-loss flagged)
+│       └── &lt;runId&gt;.json         # command, status, exit code, timestamps
+└── engine-home/&lt;thread&gt;/sessions/  # Pi native sessions (context survives restarts)</pre>
+</section>
+
+<section id="trust">
+<h2><span class="n">07</span>Trust model</h2>
+<p class="sub">What each party may do — and what is still missing.</p>
+<table><tr><th>Actor</th><th>May</th><th>May not</th></tr>
+<tr><td>Renderer</td><td>Ask via 20 bridge methods</td><td>Touch disk, processes, network, credentials</td></tr>
+<tr><td>User</td><td>Trust projects · launch runs · stop anything</td><td>—</td></tr>
+<tr><td>Agent (Pi)</td><td>Read/edit/run inside the project cwd</td><td>Launch supervised runs · approve · leave the project dir via tool UI</td></tr>
+<tr><td>Run process</td><td>Execute as the user</td><td>Exceed 4h · outlive quit (escalated + recorded)</td></tr></table>
+<div class="note"><strong>Open gaps, stated plainly:</strong> no project-directory allowlist (you can point it at <span class="code inline">~</span> — don't); approval UI auto-declines for now; no remote/slurm execution; metrics are raw logs, TensorBoard parsing is future work.</div>
+</section>
+
+<section id="verify">
+<h2><span class="n">08</span>Verification</h2>
+<p class="sub">Every claim above has a test behind it — plus live runs against the real provider.</p>
+<div class="card"><h3>Automated</h3><p>
+<span class="pill ok">20/20 unit (policy · adapter · store · host · runs)</span><span class="pill ok">Desktop isolation in real Electron</span><span class="pill ok">E2E: honest auth-failure path</span><span class="pill">test:e2e + manual live scripts (credential-gated)</span>
+</p></div>
+<div class="card"><h3>Live (OpenRouter, nex-mini)</h3><p>Prompt → streamed reply → persisted → settled, end to end through the app. Tool calls recorded with arguments. Run launched, logs streamed, single-flight enforced, stop in milliseconds. Reviews run after every milestone; findings become regression tests.</p></div>
+</section>
+
+<footer>ML Copilot · generated from the codebase at milestone 4 · mock data lives only in <span class="code inline">variants/</span> (frozen design studies) · secrets never enter the repo.</footer>
+</div>
+</body>
+</html>
