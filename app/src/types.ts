@@ -1,4 +1,4 @@
-/** Shared renderer-side types mirroring docs/ENGINE_BRIDGE.md v0.2. */
+/** Shared renderer-side types mirroring docs/ENGINE_BRIDGE.md v0.3. */
 
 export interface Thread {
   id: string;
@@ -53,3 +53,31 @@ export type EngineEvent =
   | { threadId: string; kind: 'tool-end'; tool?: string; label?: string; isError?: boolean }
   | { threadId: string; kind: 'settled' }
   | { threadId: string; kind: 'error'; errorType: EngineErrorType; error: string };
+
+export type RunStatus = 'running' | 'exited' | 'killed' | 'timeout' | 'failed';
+
+export interface RunState {
+  id: string;
+  threadId: string;
+  command: string;
+  args: string[];
+  cwd: string;
+  status: RunStatus;
+  exitCode: number | null;
+  startedAt: number;
+  endedAt: number | null;
+}
+
+export interface RunLaunchSpec {
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+}
+
+export type LaunchRunResult = { runId: string } | { error: string };
+
+export interface RunLogsResult {
+  logs: string;
+  truncated: boolean;
+  complete: boolean;
+}

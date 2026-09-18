@@ -1,4 +1,4 @@
-import type { ChangesResult, EngineEvent, EngineState, Message, Thread, ToolEntry } from './src/types';
+import type { ChangesResult, EngineEvent, EngineState, LaunchRunResult, Message, RunLaunchSpec, RunLogsResult, RunState, Thread, ToolEntry } from './src/types';
 
 /** Preload-exposed engine bridge. All methods return promises. No Node access. */
 interface MlCopilotBridge {
@@ -14,6 +14,10 @@ interface MlCopilotBridge {
   setTrust(projectPath: string, trusted: boolean): Promise<{ trusted: boolean }>;
   getToolActivity(threadId: string): Promise<ToolEntry[]>;
   getChanges(threadId: string): Promise<ChangesResult>;
+  launchRun(threadId: string, spec: RunLaunchSpec): Promise<LaunchRunResult>;
+  getActiveRun(): Promise<RunState | null>;
+  getRunLogs(runId: string, opts?: { tailBytes?: number }): Promise<RunLogsResult>;
+  stopRun(runId: string): Promise<{ ok: boolean }>;
   onEngineEvent(callback: (event: EngineEvent) => void): () => void;
 }
 

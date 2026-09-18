@@ -1,9 +1,11 @@
 import type { EngineState, Thread } from '../types';
 import ChangesPanel from './ChangesPanel';
+import RunsPanel from './RunsPanel';
 import ToolActivityPanel from './ToolActivityPanel';
 
 interface ContextPanelProps {
   thread: Thread | null;
+  trusted: boolean;
   messageCount: number | null;
   engine: EngineState | null;
   engineLoading: boolean;
@@ -14,7 +16,7 @@ interface ContextPanelProps {
 }
 
 export default function ContextPanel(props: ContextPanelProps) {
-  const { thread, messageCount, engine, engineLoading, bridgeMissing, contextOpen, onClose, onRetryEngine } = props;
+  const { thread, trusted, messageCount, engine, engineLoading, bridgeMissing, contextOpen, onClose, onRetryEngine } = props;
 
   return (
     <aside
@@ -71,6 +73,10 @@ export default function ContextPanel(props: ContextPanelProps) {
             <button className="btn" onClick={onRetryEngine}>Retry</button>
           </div>
         )}
+      </section>
+
+      <section className="inspector-section" aria-label="Runs">
+        <RunsPanel thread={thread} trusted={trusted} bridgeMissing={bridgeMissing} />
       </section>
 
       <section className="inspector-section" aria-label="Tool activity">

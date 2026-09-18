@@ -1,6 +1,7 @@
 # Engine bridge contract (preload `window.mlcopilot`)
 
-Version 0.2 — Milestone 3 adds trust, tool activity, and change inspection.
+Version 0.3 — Milestone 4 adds supervised training runs. One run at a time,
+launched only from the UI. The agent has no launch capability.
 
 ## Methods (all return promises)
 
@@ -27,6 +28,18 @@ Version 0.2 — Milestone 3 adds trust, tool activity, and change inspection.
   `files` (git repos only): current working-tree changes, each with a capped
   unified diff. `touched`: project-relative paths seen in tool calls this
   thread (also for non-repos, where no diff is claimed).
+- `launchRun(threadId: string, spec: { command: string, args?: string[], env?: Record<string,string> }) -> { runId: string } | { error: string }`
+  Starts ONE supervised process (single-flight app-wide). `command` must be an
+  absolute executable path or a binary resolvable on PATH; `args` capped at 50;
+  `env` capped at 20 entries, allowlisted to `PYTHON*`, `CUDA_*`, `PATH`
+  additions only — never replaces the process environment. Wall-time limit 4h.
+  Only the UI calls this; the agent cannot launch runs.
+- `getActiveRun() -> RunState | null`
+- `getRunLogs(runId: string, opts?: { tailBytes?: number }) -> { logs: string, truncated: boolean, complete: boolean }`
+  `tailBytes` capped at 256KB.
+- `stopRun(runId: string) -> { ok: boolean }`
+  Graceful SIGTERM to the process group, then SIGKILL. Never touches processes
+  it did not start.
 
 ## Events
 
@@ -46,6 +59,7 @@ interface Thread { id: string; title: string; projectPath: string; engineId: 'pi
 interface Message { id: string; role: 'user' | 'assistant' | 'system'; text: string; createdAt: number }
 interface ToolEntry { ts: number; tool: string; summary: string; isError: boolean }
 interface ChangedFile { path: string; status: string; diff: string; truncated: boolean }
+interface RunState { id: string; threadId: string; command: string; args: string[]; cwd: string; status: 'running' | 'exited' | 'killed' | 'timeout' | 'failed'; exitCode: number | null; startedAt: number; endedAt: number | null }
 ```
 
 ## Rules for the renderer

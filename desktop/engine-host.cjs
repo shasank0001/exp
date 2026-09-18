@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const { spawnSync } = require('node:child_process');
 const { createStore, MAX_TEXT } = require('../services/store.cjs');
+const { createRunManager } = require('../services/runs.cjs');
 const { createPiEngine } = require('../engines/pi-adapter.cjs');
 
 const THREAD_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
@@ -92,6 +93,7 @@ function createEngineHost({ userDataDir, piPath, emit }) {
   fs.mkdirSync(recordsDir, { recursive: true });
   fs.mkdirSync(enginesDir, { recursive: true });
   const store = createStore(recordsDir);
+  const runs = createRunManager(recordsDir);
   const adapters = new Map(); // threadId -> { engine, busy, starting, draft, fenced, gotAssistant }
 
   function getThread(threadId) {
@@ -365,6 +367,15 @@ function createEngineHost({ userDataDir, piPath, emit }) {
     },
     getToolActivity: (threadId) => readToolActivity(getThread(threadId).id).map(({ ts, tool, summary, isError }) => ({ ts, tool, summary, isError: Boolean(isError) })),
     getChanges: (threadId) => collectChanges(getThread(threadId)),
+    launchRun: (threadId, spec) => {
+      // Runs always execute in the thread's project directory; the renderer
+      // cannot choose another cwd, and the agent cannot launch runs at all.
+      const thread = getThread(threadId);
+      return runs.launch({ threadId: thread.id, command: spec && spec.command, args: spec && spec.args, env: spec && spec.env, cwd: thread.projectPath });
+    },
+    getActiveRun: () => runs.activeState(),
+    getRunLogs: (runId, opts) => runs.logs(runId, opts && opts.tailBytes),
+    stopRun: (runId) => runs.stop(runId),
 
     async sendPrompt(threadId, text) {
       const thread = getThread(threadId);
@@ -437,6 +448,7 @@ function createEngineHost({ userDataDir, piPath, emit }) {
     },
 
     async shutdown() {
+      runs.shutdown();
       const stops = [...adapters.values()].map((slot) => slot.engine.stop().catch(() => {}));
       adapters.clear();
       await Promise.all(stops);

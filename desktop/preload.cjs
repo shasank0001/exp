@@ -14,6 +14,10 @@ contextBridge.exposeInMainWorld('mlcopilot', Object.freeze({
   setTrust: (projectPath, trusted) => ipcRenderer.invoke('threads:trust-set', projectPath, trusted),
   getToolActivity: (threadId) => ipcRenderer.invoke('threads:tools', threadId),
   getChanges: (threadId) => ipcRenderer.invoke('threads:changes', threadId),
+  launchRun: (threadId, spec) => ipcRenderer.invoke('runs:launch', threadId, spec),
+  getActiveRun: () => ipcRenderer.invoke('runs:active'),
+  getRunLogs: (runId, opts) => ipcRenderer.invoke('runs:logs', runId, opts),
+  stopRun: (runId) => ipcRenderer.invoke('runs:stop', runId),
   onEngineEvent: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on('mlcopilot:engine-event', listener);

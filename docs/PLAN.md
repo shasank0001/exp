@@ -73,6 +73,11 @@ Training supervision, TensorBoard/GPU telemetry, dataset/checkpoint tools, multi
   inspection (NUL-delimited porcelain, renames resolved, diff vs HEAD so staged
   changes appear); non-repos report touched paths with no diff claims; trust
   file quarantine + atomic writes; single-instance lock.
+- Milestone 4 (run supervision): single-flight owned processes with explicit UI
+  launch (agent cannot launch), group-kill stop with idempotent retry, 4h
+  wall-time limit, capped log persistence with truncation flags, allowlisted
+  env overrides, quit escalation persisting final state. Review-fixed: quit
+  orphans, spawn-before-log leak, tail-loss honesty, short-read guards.
 - Unauthenticated `prompt` is rejected with a missing-API-key error; the adapter
   surfaces this as `{ ok: false, errorType: 'auth' }`. `abort` succeeds; strict
   LF JSONL framing parses with zero unparseable lines (`tests/pi-rpc-spike.cjs`,

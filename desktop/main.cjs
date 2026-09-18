@@ -118,6 +118,22 @@ app.whenReady().then(async () => {
     if (!senderIsEntry(event)) throw new Error('Untrusted renderer');
     return host.getChanges(threadId);
   });
+  ipcMain.handle('runs:launch', (event, threadId, spec) => {
+    if (!senderIsEntry(event)) throw new Error('Untrusted renderer');
+    return host.launchRun(threadId, spec || {});
+  });
+  ipcMain.handle('runs:active', (event) => {
+    if (!senderIsEntry(event)) throw new Error('Untrusted renderer');
+    return host.getActiveRun();
+  });
+  ipcMain.handle('runs:logs', (event, runId, opts) => {
+    if (!senderIsEntry(event)) throw new Error('Untrusted renderer');
+    return host.getRunLogs(runId, opts || {});
+  });
+  ipcMain.handle('runs:stop', (event, runId) => {
+    if (!senderIsEntry(event)) throw new Error('Untrusted renderer');
+    return host.stopRun(runId);
+  });
 
   await mainWindow.loadURL(entry);
 }).catch((error) => { console.error('Desktop startup failed:', error); app.exit(1); });

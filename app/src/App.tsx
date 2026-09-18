@@ -380,6 +380,7 @@ export default function App() {
 
       <ContextPanel
         thread={activeThread}
+        trusted={trust === 'trusted'}
         messageCount={messages ? messages.length : null}
         engine={engine}
         engineLoading={engineLoading}

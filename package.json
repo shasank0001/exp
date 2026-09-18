@@ -6,8 +6,8 @@
   "main": "desktop/main.cjs",
   "scripts": {
     "start": "electron .",
-    "check": "node --check desktop/main.cjs && node --check desktop/preload.cjs && node --check desktop/policy.cjs && node --check desktop/engine-host.cjs && node --check engines/pi-adapter.cjs && node --check services/store.cjs && npx tsc --noEmit -p tsconfig.json",
-    "test": "node --test tests/policy.test.cjs tests/pi-adapter.test.cjs tests/store.test.cjs tests/engine-host.test.cjs",
+    "check": "node --check desktop/main.cjs && node --check desktop/preload.cjs && node --check desktop/policy.cjs && node --check desktop/engine-host.cjs && node --check engines/pi-adapter.cjs && node --check services/store.cjs && node --check services/runs.cjs && npx tsc --noEmit -p tsconfig.json",
+    "test": "node --test tests/policy.test.cjs tests/pi-adapter.test.cjs tests/store.test.cjs tests/engine-host.test.cjs tests/runs.test.cjs",
     "test:desktop": "node --test tests/desktop-sandbox.test.cjs",
     "test:e2e": "node tests/e2e-workspace.cjs",
     "dev": "vite",
