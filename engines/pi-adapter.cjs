@@ -4,12 +4,14 @@
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 
-function createPiEngine({ piPath = 'pi', home, cwd } = {}) {
+function createPiEngine({ piPath = 'pi', home, cwd, sessionMode = 'none' } = {}) {
   let child = null;
   let buffer = '';
   let nextId = 0;
   const pending = new Map();
   const collected = [];
+  const listeners = new Set();
+  const exitListeners = new Set();
   let stderrTail = '';
   const exitInfo = { clean: false, code: null, signal: null };
 
@@ -22,6 +24,15 @@ function createPiEngine({ piPath = 'pi', home, cwd } = {}) {
       return;
     }
     collected.push({ kind: parsed.type === 'response' ? 'response' : 'event', event: parsed });
+    if (parsed.type !== 'response') {
+      for (const listener of listeners) {
+        try {
+          listener(parsed);
+        } catch {
+          // A broken listener must not break framing for the rest.
+        }
+      }
+    }
     if (parsed.type === 'response' && parsed.id) {
       if (timedOut.has(parsed.id)) {
         collected.push({ kind: 'late-response', event: parsed });
@@ -88,7 +99,13 @@ function createPiEngine({ piPath = 'pi', home, cwd } = {}) {
       exitInfo.clean = false;
       exitInfo.code = null;
       exitInfo.signal = null;
-      child = spawn(piPath, ['--mode', 'rpc', '--no-session'], {
+      if (sessionMode !== 'none' && sessionMode !== 'persistent') {
+        return Promise.reject(new Error(`unsupported sessionMode: ${sessionMode}`));
+      }
+      const args = sessionMode === 'persistent'
+        ? ['--mode', 'rpc']
+        : ['--mode', 'rpc', '--no-session'];
+      child = spawn(piPath, args, {
         cwd,
         env: { ...process.env, ...(home ? { HOME: home } : {}) },
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -110,6 +127,13 @@ function createPiEngine({ piPath = 'pi', home, cwd } = {}) {
         exitInfo.clean = code === 0;
         flushTail();
         failPending(new Error(`pi exited (code=${code}, signal=${signal})`));
+        for (const listener of exitListeners) {
+          try {
+            listener({ ...exitInfo });
+          } catch {
+            // A broken listener must not break shutdown for the rest.
+          }
+        }
       });
       // get_state roundtrip proves the RPC channel is alive before start() resolves.
       return engine.getState().then((state) => {
@@ -194,6 +218,14 @@ function createPiEngine({ piPath = 'pi', home, cwd } = {}) {
 
     events() {
       return collected.slice();
+    },
+    onEvent(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    onExit(listener) {
+      exitListeners.add(listener);
+      return () => exitListeners.delete(listener);
     },
     exitInfo: () => ({ ...exitInfo }),
     stderrTail: () => stderrTail,

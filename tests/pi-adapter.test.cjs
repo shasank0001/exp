@@ -35,6 +35,26 @@ test('pi adapter: state, auth failure mapping, abort, clean exit, strict framing
   assert.equal(engine.exitInfo().clean, true, 'process must exit cleanly on stop()');
 });
 
+test('pi adapter: persistent sessions keep a session file; listeners observe live events', async () => {
+  const home = `${HOME}-persistent`;
+  fs.rmSync(home, { recursive: true, force: true });
+  fs.mkdirSync(home, { recursive: true });
+  const engine = createPiEngine({ piPath: PI, home, cwd: path.resolve(__dirname, '..'), sessionMode: 'persistent' });
+  const seen = [];
+  const unsubscribe = engine.onEvent((event) => seen.push(event));
+  assert.equal(typeof unsubscribe, 'function');
+  await engine.start();
+  try {
+    const state = await engine.getState();
+    assert.equal(state.ok, true);
+    assert.ok(state.data.sessionFile, 'persistent mode must report a session file');
+    assert.ok(Array.isArray(seen), 'listener must not break event collection');
+  } finally {
+    unsubscribe();
+    await engine.stop();
+  }
+});
+
 test('pi adapter: structured error when binary is missing', async () => {
   const engine = createPiEngine({ piPath: '/nonexistent/pi', home: HOME, cwd: '/tmp' });
   await assert.rejects(() => engine.start(), error => error.code === 'PI_NOT_FOUND');

@@ -1,5 +1,6 @@
 node_modules/
 dist/
+desktop/renderer-dist/
 out/
 release/
 .playwright-mcp/

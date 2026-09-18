@@ -6,16 +6,27 @@
   "main": "desktop/main.cjs",
   "scripts": {
     "start": "electron .",
-    "check": "node --check desktop/main.cjs && node --check desktop/preload.cjs && node --check desktop/host.js && node --check desktop/policy.cjs && node --check engines/pi-adapter.cjs",
-    "test": "node --test tests/policy.test.cjs tests/pi-adapter.test.cjs",
-    "test:desktop": "node --test tests/desktop-sandbox.test.cjs"
+    "check": "node --check desktop/main.cjs && node --check desktop/preload.cjs && node --check desktop/host.js && node --check desktop/policy.cjs && node --check desktop/engine-host.cjs && node --check engines/pi-adapter.cjs && node --check services/store.cjs && npx tsc --noEmit -p tsconfig.json",
+    "test": "node --test tests/policy.test.cjs tests/pi-adapter.test.cjs tests/store.test.cjs",
+    "test:desktop": "node --test tests/desktop-sandbox.test.cjs",
+    "dev": "vite",
+    "build:renderer": "vite build"
   },
   "engines": {
     "node": ">=22"
   },
   "devDependencies": {
     "@mariozechner/pi-coding-agent": "0.73.1",
+    "@types/react": "19.1.13",
+    "@types/react-dom": "19.1.9",
+    "@vitejs/plugin-react": "4.7.0",
     "electron": "44.4.1",
-    "playwright": "1.63.0"
+    "playwright": "1.63.0",
+    "typescript": "5.9.2",
+    "vite": "7.1.7"
+  },
+  "dependencies": {
+    "react": "19.1.1",
+    "react-dom": "19.1.1"
   }
 }
