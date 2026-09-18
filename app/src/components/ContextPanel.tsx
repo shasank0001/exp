@@ -1,4 +1,6 @@
 import type { EngineState, Thread } from '../types';
+import ChangesPanel from './ChangesPanel';
+import ToolActivityPanel from './ToolActivityPanel';
 
 interface ContextPanelProps {
   thread: Thread | null;
@@ -51,6 +53,9 @@ export default function ContextPanel(props: ContextPanelProps) {
           engine.available ? (
             <div className="stack-small">
               <p className="healthy"><span className="dot" aria-hidden="true" /> Available{engine.version ? ` · ${engine.version}` : ''}</p>
+              {engine.provider ? (
+                <p className="muted small">Provider: <span className="mono">{engine.provider}</span></p>
+              ) : null}
               <p className="muted small">The agent engine is ready. Sending is enabled.</p>
             </div>
           ) : (
@@ -66,6 +71,14 @@ export default function ContextPanel(props: ContextPanelProps) {
             <button className="btn" onClick={onRetryEngine}>Retry</button>
           </div>
         )}
+      </section>
+
+      <section className="inspector-section" aria-label="Tool activity">
+        <ToolActivityPanel threadId={thread ? thread.id : null} />
+      </section>
+
+      <section className="inspector-section" aria-label="Changes">
+        <ChangesPanel threadId={thread ? thread.id : null} />
       </section>
 
       <div className="context-bottom">Context stays with this thread</div>

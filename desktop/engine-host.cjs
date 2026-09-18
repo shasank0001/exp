@@ -9,6 +9,27 @@ const { createStore, MAX_TEXT } = require('../services/store.cjs');
 const { createPiEngine } = require('../engines/pi-adapter.cjs');
 
 const THREAD_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+const TOOL_SUMMARY_MAX = 300;
+const TOOL_LOG_MAX_LINES = 1000;
+const DIFF_MAX_LINES = 200;
+const DIFF_MAX_FILES = 10;
+
+function summarizeToolArgs(args) {
+  if (args === undefined || args === null) return '';
+  const text = typeof args === 'string' ? args : JSON.stringify(args);
+  return text.length > TOOL_SUMMARY_MAX ? `${text.slice(0, TOOL_SUMMARY_MAX)}…` : text;
+}
+
+// Project-relative path touched by a tool call, or null. Never escapes the project.
+function touchedPath(projectPath, args) {
+  if (!args || typeof args !== 'object') return null;
+  const candidate = args.path || args.file || args.filePath || args.absolutePath;
+  if (typeof candidate !== 'string' || !candidate) return null;
+  const resolved = path.resolve(projectPath, candidate);
+  const relative = path.relative(projectPath, resolved);
+  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return null;
+  return relative;
+}
 
 function defaultModelFromSettings() {
   // The Pi process inherits the user's HOME, so it reads this same file; mirroring
@@ -115,7 +136,161 @@ function createEngineHost({ userDataDir, piPath, emit }) {
     return slot;
   }
 
+  function trustFile() {
+    return path.join(recordsDir, 'trust.json');
+  }
+
+  function readTrust() {
+    try {
+      const raw = JSON.parse(fs.readFileSync(trustFile(), 'utf8'));
+      return raw && typeof raw === 'object' ? raw : {};
+    } catch (error) {
+      if (error.code === 'ENOENT') return {};
+      // Quarantine corruption instead of bricking trust calls; the backup keeps data.
+      const backup = `${trustFile()}.corrupt-${Date.now()}`;
+      try {
+        fs.renameSync(trustFile(), backup);
+      } catch {
+        throw error;
+      }
+      return {};
+    }
+  }
+
+  function checkProjectPath(projectPath) {
+    if (typeof projectPath !== 'string' || !path.isAbsolute(projectPath)) {
+      throw new Error('projectPath must be absolute');
+    }
+    const stat = fs.statSync(projectPath, { throwIfNoEntry: false });
+    if (!stat || !stat.isDirectory()) throw new Error('projectPath must be an existing directory');
+    return projectPath;
+  }
+
+  function toolLogFile(threadId) {
+    if (!THREAD_ID_PATTERN.test(threadId || '')) throw new Error('invalid thread id');
+    return path.join(recordsDir, `tools-${threadId}.jsonl`);
+  }
+
+  function recordTool(threadId, entry) {
+    try {
+      fs.appendFileSync(toolLogFile(threadId), `${JSON.stringify({ ts: Date.now(), ...entry })}\n`);
+      const stat = fs.statSync(toolLogFile(threadId));
+      if (stat.size > 512 * 1024) {
+        const lines = fs.readFileSync(toolLogFile(threadId), 'utf8').split('\n').filter(Boolean);
+        fs.writeFileSync(toolLogFile(threadId), `${lines.slice(-TOOL_LOG_MAX_LINES).join('\n')}\n`);
+      }
+    } catch {
+      // Activity logging must never break the run itself.
+    }
+  }
+
+  function readToolActivity(threadId) {
+    let raw;
+    try {
+      raw = fs.readFileSync(toolLogFile(threadId), 'utf8');
+    } catch (error) {
+      if (error.code === 'ENOENT') return [];
+      throw error;
+    }
+    const out = [];
+    for (const line of raw.split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        out.push(JSON.parse(line));
+      } catch {
+        // Skip corrupt lines.
+      }
+    }
+    return out.slice(-200).reverse();
+  }
+
+  function git(projectPath, args) {
+    const result = spawnSync('git', args, { cwd: projectPath, timeout: 15000, encoding: 'utf8' });
+    return { ok: result.status === 0, out: String(result.stdout || '') };
+  }
+
+  function collectChanges(thread) {
+    const probed = git(thread.projectPath, ['rev-parse', '--is-inside-work-tree']);
+    if (probed.out.trim() !== 'true') {
+      return { isRepo: false, files: [], touched: collectTouched(thread) };
+    }
+    const status = git(thread.projectPath, ['status', '--porcelain=v1', '-z']);
+    if (!status.ok) {
+      return { isRepo: true, files: [], touched: collectTouched(thread), error: 'Could not read git status.' };
+    }
+    const files = [];
+    for (const entry of status.out.split('\0')) {
+      if (files.length >= DIFF_MAX_FILES) break;
+      if (entry.length < 4) continue;
+      const code = entry.slice(0, 2);
+      let filePath = entry.slice(3);
+      // Rename entries look like "R  old -> new": show the new path.
+      const arrow = filePath.indexOf(' -> ');
+      if (code[0] === 'R' && arrow !== -1) filePath = filePath.slice(arrow + 4);
+      if (!filePath) continue;
+      if (code.trim() === '??') {
+        files.push({ path: filePath, status: 'untracked', diff: '(Untracked file: content not shown.)', truncated: false });
+        continue;
+      }
+      // Diff against HEAD so staged and unstaged changes both appear.
+      const diffed = git(thread.projectPath, ['diff', 'HEAD', '--no-color', '--', filePath]);
+      const lines = diffed.out.split('\n');
+      files.push({
+        path: filePath,
+        status: code.trim(),
+        diff: lines.slice(0, DIFF_MAX_LINES).join('\n') || '(No textual diff.)',
+        truncated: lines.length > DIFF_MAX_LINES,
+      });
+    }
+    return { isRepo: true, files, touched: collectTouched(thread) };
+  }
+
+  function collectTouched(thread) {
+    // Reads the bounded touch fields recorded at event time (newest kept).
+    let raw;
+    try {
+      raw = fs.readFileSync(toolLogFile(thread.id), 'utf8');
+    } catch (error) {
+      if (error.code === 'ENOENT') return [];
+      throw error;
+    }
+    const seen = new Set();
+    const ordered = [];
+    for (const line of raw.split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const entry = JSON.parse(line);
+        if (typeof entry.touch === 'string' && entry.touch && !seen.has(entry.touch)) {
+          seen.add(entry.touch);
+          ordered.push(entry.touch);
+        }
+      } catch {
+        // Skip corrupt lines.
+      }
+    }
+    return ordered.slice(-50);
+  }
+
+  function recordRawToolEvent(thread, event) {
+    const type = event.type;
+    if (type === 'tool_execution_start') {
+      const args = event.args && typeof event.args === 'object' ? event.args : undefined;
+      recordTool(thread.id, {
+        tool: event.toolName || 'tool',
+        summary: summarizeToolArgs(args),
+        isError: false,
+        touch: touchedPath(thread.projectPath, args) || undefined,
+      });
+    } else if (type === 'tool_execution_end') {
+      recordTool(thread.id, { tool: event.toolName || 'tool', summary: event.isError ? 'failed' : 'finished', isError: Boolean(event.isError) });
+    } else if (type === 'message_update' && event.assistantMessageEvent && event.assistantMessageEvent.type === 'toolcall_start') {
+      recordTool(thread.id, { tool: event.assistantMessageEvent.toolName || 'tool', summary: 'started', isError: false });
+    }
+  }
+
   function handlePiEvent(thread, slot, event) {
+    // The activity log records what actually happened, even for fenced runs.
+    recordRawToolEvent(thread, event);
     // Ignore late events from a previous generation (after abort or crash).
     if (slot.fenced || adapters.get(thread.id) !== slot) return;
     const mapped = mapPiEvent(thread.id, event);
@@ -173,6 +348,23 @@ function createEngineHost({ userDataDir, piPath, emit }) {
     listThreads: () => store.listThreads(),
     createThread: ({ title, projectPath }) => store.createThread({ title, projectPath }),
     getMessages: (threadId) => store.getMessages(getThread(threadId).id),
+    getTrust: (projectPath) => {
+      checkProjectPath(projectPath);
+      return { trusted: readTrust()[projectPath] === true };
+    },
+    setTrust: (projectPath, trusted) => {
+      checkProjectPath(projectPath);
+      const all = readTrust();
+      if (trusted) all[projectPath] = true;
+      else delete all[projectPath];
+      const file = trustFile();
+      const tmp = `${file}.${process.pid}.tmp`;
+      fs.writeFileSync(tmp, JSON.stringify(all, null, 2));
+      fs.renameSync(tmp, file);
+      return { trusted: trusted === true };
+    },
+    getToolActivity: (threadId) => readToolActivity(getThread(threadId).id).map(({ ts, tool, summary, isError }) => ({ ts, tool, summary, isError: Boolean(isError) })),
+    getChanges: (threadId) => collectChanges(getThread(threadId)),
 
     async sendPrompt(threadId, text) {
       const thread = getThread(threadId);
@@ -236,7 +428,9 @@ function createEngineHost({ userDataDir, piPath, emit }) {
         const probe = spawnSync(piPath, ['--version'], { timeout: 10000, encoding: 'utf8' });
         const version = String(probe.stdout || probe.stderr || '').trim().split('\n')[0];
         if (probe.status !== 0) return { available: false, error: 'Pi binary failed to run.' };
-        return { available: true, version: version || 'unknown' };
+        const model = process.env.MLCOPILOT_MODEL || defaultModelFromSettings();
+        const provider = model && model.includes('/') ? model.split('/')[0] : undefined;
+        return { available: true, version: version || 'unknown', provider };
       } catch {
         return { available: false, error: 'Pi binary failed to run.' };
       }
@@ -250,4 +444,4 @@ function createEngineHost({ userDataDir, piPath, emit }) {
   };
 }
 
-module.exports = { createEngineHost, mapPiEvent };
+module.exports = { createEngineHost, mapPiEvent, summarizeToolArgs, touchedPath };

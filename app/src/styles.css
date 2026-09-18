@@ -154,6 +154,30 @@ h1, h2, h3, p { margin: 0; }
 
 .footer-status { grid-column: 1/4; grid-row: 3; font-size: 8px; background: #f4f3ed; border-top: 1px solid #e3e4d9; padding: 6px 17px; color: #949985; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 
+/* Trust gate */
+.trust-dock { padding: 8px 42px 0; }
+.trust-dock-inner { max-width: 706px; margin: auto; }
+.banner.trust { display: block; background: var(--tint); border: 1px solid var(--line); color: var(--text); }
+.banner.trust strong { font-size: 12px; }
+.banner.trust p { margin-top: 6px; }
+.banner.trust p[role='alert'] { color: #7c452e; }
+.trust-actions { display: flex; gap: 8px; margin-top: 10px; }
+.banner.trust.reminder { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
+/* Inspector panels: tool activity + changes */
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.panel-head .btn { padding: 5px 10px; }
+.activity-list, .changes-list { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.activity-item { border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; background: var(--panel); }
+.activity-item .summary { font-size: 11px; margin-top: 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.activity-item .row, .change-file .row { gap: 8px; }
+.error-flag { font-size: 9px; font-weight: 700; color: #7c452e; background: #f9ece6; border: 1px solid #e4c7b8; border-radius: 4px; padding: 1px 6px; text-transform: uppercase; letter-spacing: 0.6px; }
+.change-file { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 9px 11px; }
+.change-file .mono.grow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status-pill { font-family: var(--mono); font-size: 10px; background: var(--side); border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px; flex-shrink: 0; }
+.diff-block { margin: 8px 0 0; padding: 9px 11px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; overflow: auto; max-height: 260px; white-space: pre; }
+.touched-list { margin: 8px 0 0 18px; padding: 0; font-size: 11px; overflow-wrap: anywhere; }
+
 .nav-toggle, .panel-close { display: none; }
 .panel-backdrop { position: fixed; inset: 0; background: #23281d55; border: 0; z-index: 10; }
 
@@ -178,5 +202,6 @@ h1, h2, h3, p { margin: 0; }
   .conversation { padding: 29px 21px 0; }
   .intro h1 { font-size: 34px; }
   .composer-dock { padding: 13px 18px 10px; }
+  .trust-dock { padding: 8px 18px 0; }
   .footer-status { grid-column: 1; }
 }

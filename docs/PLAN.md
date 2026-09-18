@@ -68,6 +68,11 @@ Training supervision, TensorBoard/GPU telemetry, dataset/checkpoint tools, multi
   added; single-instance lock in main.
 - Live end-to-end through the real app (OpenRouter nex-mini): prompt accepted,
   exact reply streamed, persisted, and settled.
+- Milestone 3 (change visibility + trust): per-project trust gate with provider
+  disclosure; persisted tool-activity log with bounded records; git change
+  inspection (NUL-delimited porcelain, renames resolved, diff vs HEAD so staged
+  changes appear); non-repos report touched paths with no diff claims; trust
+  file quarantine + atomic writes; single-instance lock.
 - Unauthenticated `prompt` is rejected with a missing-API-key error; the adapter
   surfaces this as `{ ok: false, errorType: 'auth' }`. `abort` succeeds; strict
   LF JSONL framing parses with zero unparseable lines (`tests/pi-rpc-spike.cjs`,

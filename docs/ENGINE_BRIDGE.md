@@ -1,8 +1,6 @@
 # Engine bridge contract (preload `window.mlcopilot`)
 
-Version 0.1 — Milestone 2. The renderer is sandboxed with no Node access; all
-privileged work goes through these IPC methods. The renderer must not assume
-any other global.
+Version 0.2 — Milestone 3 adds trust, tool activity, and change inspection.
 
 ## Methods (all return promises)
 
@@ -15,9 +13,20 @@ any other global.
 - `getMessages(threadId: string) -> Message[]`
 - `sendPrompt(threadId: string, text: string) -> { accepted: boolean, error?: string }`
 - `abortThread(threadId: string) -> { ok: boolean }`
-- `getEngineState() -> { available: boolean, version?: string, error?: string }`
+- `getEngineState() -> { available: boolean, version?: string, provider?: string, error?: string }`
   `available=false` when the Pi binary is missing or fails to start; the
-  renderer shows this honestly and disables sending.
+  renderer shows this honestly and disables sending. `provider` names the model
+  provider that project content may be sent to (e.g. `"openrouter"`).
+- `getTrust(projectPath: string) -> { trusted: boolean }`
+- `setTrust(projectPath: string, trusted: boolean) -> { trusted: boolean }`
+  The renderer must require explicit trust before the first prompt in a project
+  and show what trust means (below). Trust is stored locally, per project path.
+- `getToolActivity(threadId: string) -> ToolEntry[]`
+  Most recent first, capped at 200. Records what the agent actually did.
+- `getChanges(threadId: string) -> { isRepo: boolean, files: ChangedFile[], touched: string[] }`
+  `files` (git repos only): current working-tree changes, each with a capped
+  unified diff. `touched`: project-relative paths seen in tool calls this
+  thread (also for non-repos, where no diff is claimed).
 
 ## Events
 
@@ -35,6 +44,8 @@ any other global.
 ```ts
 interface Thread { id: string; title: string; projectPath: string; engineId: 'pi' | 'test'; createdAt: number; updatedAt: number }
 interface Message { id: string; role: 'user' | 'assistant' | 'system'; text: string; createdAt: number }
+interface ToolEntry { ts: number; tool: string; summary: string; isError: boolean }
+interface ChangedFile { path: string; status: string; diff: string; truncated: boolean }
 ```
 
 ## Rules for the renderer

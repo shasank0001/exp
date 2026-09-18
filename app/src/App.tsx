@@ -5,6 +5,7 @@ import Sidebar from './components/Sidebar';
 import Conversation from './components/Conversation';
 import Composer from './components/Composer';
 import ContextPanel from './components/ContextPanel';
+import TrustBanner, { TrustReminder } from './components/TrustBanner';
 
 export default function App() {
   const bridgeMissing = getBridge() === undefined;
@@ -28,6 +29,9 @@ export default function App() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
+  const [trust, setTrust] = useState<'checking' | 'trusted' | 'untrusted' | 'deferred'>('checking');
+  const [trustSaving, setTrustSaving] = useState(false);
+  const [trustError, setTrustError] = useState<string | null>(null);
   const [runtime, setRuntime] = useState<{ electron: string; platform: string; mode: string } | null>(null);
   const streamRef = useRef('');
   const activeRef = useRef<string | null>(null);
@@ -84,6 +88,31 @@ export default function App() {
     void refreshThreads();
     getBridge()?.runtimeInfo().then(setRuntime).catch(() => {});
   }, [refreshEngine, refreshThreads]);
+
+  const projectPath = activeThread?.projectPath ?? null;
+
+  useEffect(() => {
+    const bridge = getBridge();
+    if (!bridge || bridgeMissing || !projectPath) return;
+    let cancelled = false;
+    setTrust('checking');
+    setTrustError(null);
+    bridge.getTrust(projectPath).then(
+      (result) => {
+        if (!cancelled) setTrust(result.trusted ? 'trusted' : 'untrusted');
+      },
+      (e) => {
+        // Fail closed: without a trust answer, sending stays blocked.
+        if (!cancelled) {
+          setTrust('untrusted');
+          setTrustError(e instanceof Error ? e.message : 'Could not check project trust.');
+        }
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [bridgeMissing, projectPath]);
 
   useEffect(() => {
     activeRef.current = activeThreadId;
@@ -154,11 +183,26 @@ export default function App() {
     return unsubscribe;
   }, [activeThreadId, refreshMessages]);
 
+  const handleTrustChoice = useCallback(async (trusted: boolean) => {
+    const bridge = getBridge();
+    if (!bridge || !projectPath || trustSaving) return;
+    setTrustSaving(true);
+    setTrustError(null);
+    try {
+      const result = await bridge.setTrust(projectPath, trusted);
+      setTrust(result.trusted ? 'trusted' : 'deferred');
+    } catch (e) {
+      setTrustError(e instanceof Error ? e.message : 'Could not save trust choice.');
+    } finally {
+      setTrustSaving(false);
+    }
+  }, [projectPath, trustSaving]);
+
   const handleSend = useCallback(async () => {
     const bridge = getBridge();
     const text = draft.trim();
     const sentId = activeThreadId;
-    if (!bridge || !sentId || text.length === 0 || sending) return;
+    if (!bridge || !sentId || text.length === 0 || sending || trust !== 'trusted') return;
     setSending(true);
     setSendError(null);
     try {
@@ -176,7 +220,7 @@ export default function App() {
       setSendError(e instanceof Error ? e.message : 'Send failed.');
       setSending(false);
     }
-  }, [draft, activeThreadId, sending]);
+  }, [draft, activeThreadId, sending, trust]);
 
   const handleAbort = useCallback(async () => {
     const bridge = getBridge();
@@ -226,8 +270,16 @@ export default function App() {
   }, [activeThread]);
 
   const engineUnavailable = engine !== null && !engine.available;
+  const trustBlock =
+    bridgeMissing || activeThreadId === null
+      ? null
+      : trust === 'checking'
+        ? 'Checking project trust…'
+        : trust !== 'trusted'
+          ? 'Sending is blocked until you trust this project.'
+          : null;
   const canSend =
-    !bridgeMissing && activeThreadId !== null && !engineUnavailable && !engineLoading;
+    !bridgeMissing && activeThreadId !== null && !engineUnavailable && !engineLoading && trust === 'trusted';
   const sendDisabledReason = bridgeMissing
     ? 'Bridge unavailable — run inside Electron to send messages.'
     : activeThreadId === null
@@ -236,7 +288,7 @@ export default function App() {
         ? 'Checking engine status…'
         : engineUnavailable
           ? `Engine unavailable${engine?.error ? `: ${engine.error}` : ''} — sending is disabled.`
-          : null;
+          : trustBlock;
 
   return (
     <div className="app">
@@ -292,6 +344,27 @@ export default function App() {
           onRetry={() => activeThreadId && void refreshMessages(activeThreadId)}
           onDismissEngineError={() => setEngineError(null)}
         />
+        {activeThread && !bridgeMissing && trust === 'untrusted' ? (
+          <div className="trust-dock">
+            <div className="trust-dock-inner">
+              <TrustBanner
+                projectPath={activeThread.projectPath}
+                provider={engine?.provider}
+                saving={trustSaving}
+                saveError={trustError}
+                onTrust={() => void handleTrustChoice(true)}
+                onDefer={() => void handleTrustChoice(false)}
+              />
+            </div>
+          </div>
+        ) : null}
+        {activeThread && !bridgeMissing && trust === 'deferred' ? (
+          <div className="trust-dock">
+            <div className="trust-dock-inner">
+              <TrustReminder onTrust={() => void handleTrustChoice(true)} saving={trustSaving} />
+            </div>
+          </div>
+        ) : null}
         <Composer
           draft={draft}
           sending={sending}
