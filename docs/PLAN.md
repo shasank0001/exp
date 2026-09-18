@@ -55,9 +55,10 @@ Training supervision, TensorBoard/GPU telemetry, dataset/checkpoint tools, multi
   starts cleanly and `get_state` confirms no session persistence.
 - Provider: OpenRouter (`OPENROUTER_API_KEY` env only, never committed) with
   `~/.pi/agent/settings.json` setting default model
-  `openrouter/deepseek/deepseek-v4-flash-0731` (note: the `:free` suffixed slug
-  does not exist on OpenRouter; the base slug was verified live).
-  Live RPC prompt returned streamed text successfully. The app reads an optional
+  `openrouter/nex-agi/nex-n2.5-mini:free` (verified live; also registered
+  `openrouter/deepseek/deepseek-v4-flash-0731` — note the `:free` suffixed
+  DeepSeek slug does not exist).
+  Live RPC prompts return streamed text successfully. The app reads an optional
   `MLCOPILOT_MODEL` env override; otherwise Pi uses its configured default.
 - Unauthenticated `prompt` is rejected with a missing-API-key error; the adapter
   surfaces this as `{ ok: false, errorType: 'auth' }`. `abort` succeeds; strict
