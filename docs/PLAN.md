@@ -53,6 +53,12 @@ Training supervision, TensorBoard/GPU telemetry, dataset/checkpoint tools, multi
 - DISPLAY is set to :1; `npm run test:desktop` passes in this environment.
 - Pi 0.73.1 pinned locally (`node_modules/.bin/pi`); `pi --mode rpc --no-session`
   starts cleanly and `get_state` confirms no session persistence.
+- Provider: OpenRouter (`OPENROUTER_API_KEY` env only, never committed) with
+  `~/.pi/agent/settings.json` setting default model
+  `openrouter/deepseek/deepseek-v4-flash-0731` (note: the `:free` suffixed slug
+  does not exist on OpenRouter; the base slug was verified live).
+  Live RPC prompt returned streamed text successfully. The app reads an optional
+  `MLCOPILOT_MODEL` env override; otherwise Pi uses its configured default.
 - Unauthenticated `prompt` is rejected with a missing-API-key error; the adapter
   surfaces this as `{ ok: false, errorType: 'auth' }`. `abort` succeeds; strict
   LF JSONL framing parses with zero unparseable lines (`tests/pi-rpc-spike.cjs`,

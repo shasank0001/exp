@@ -73,6 +73,7 @@ function createEngineHost({ userDataDir, piPath, emit }) {
       cwd: thread.projectPath,
       home: path.join(enginesDir, thread.id),
       sessionMode: 'persistent',
+      model: process.env.MLCOPILOT_MODEL || undefined,
     });
     slot.engine = engine;
     engine.onEvent((event) => handlePiEvent(thread, slot, event));
