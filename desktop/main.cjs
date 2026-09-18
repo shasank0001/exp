@@ -11,6 +11,7 @@ const entry = DEV_URL || `${ROOT_URL}/desktop/renderer-dist/index.html`;
 const prototype = `${ROOT_URL}/variants/01-thread.html`;
 let mainWindow;
 let host;
+let quitting = false;
 
 if (!app.requestSingleInstanceLock()) {
   console.error('Another ML Copilot instance is already running.');
@@ -28,7 +29,11 @@ app.whenReady().then(async () => {
   host = createEngineHost({
     userDataDir,
     piPath,
-    emit: (payload) => mainWindow && mainWindow.webContents.send('mlcopilot:engine-event', payload),
+    emit: (payload) => {
+      if (mainWindow && !mainWindow.webContents.isDestroyed()) {
+        mainWindow.webContents.send('mlcopilot:engine-event', payload);
+      }
+    },
   });
 
   const isolated = session.fromPartition('ml-copilot-app');
@@ -140,7 +145,8 @@ app.whenReady().then(async () => {
 } // end single-instance primary branch
 
 app.on('before-quit', async (event) => {
-  if (!host) return;
+  if (!host || quitting) return;
+  quitting = true;
   event.preventDefault();
   try {
     await host.shutdown();

@@ -75,12 +75,12 @@ function createRunManager(baseDir) {
     if (active === run) active = null;
   }
 
-  function metaLogCapped(runId) {
+  function metaFlags(runId) {
     try {
       const meta = JSON.parse(fs.readFileSync(metaPath(runId), 'utf8'));
-      return meta && meta.logCapped === true;
+      return { capped: meta && meta.logCapped === true, missing: false };
     } catch {
-      return false;
+      return { capped: false, missing: true };
     }
   }
 
@@ -160,17 +160,38 @@ function createRunManager(baseDir) {
       return { runId: id };
     },
 
-    async stop(runId) {
+    stop(runId) {
       const run = active;
-      if (!run) return { ok: true }; // idempotent: nothing running
-      if (runId && run.id !== runId) return { ok: false, error: 'A different run is active.' };
-      if (run.status !== 'running') return { ok: true };
+      if (!run) return Promise.resolve({ ok: true }); // idempotent: nothing running
+      if (runId && run.id !== runId) return Promise.resolve({ ok: false, error: 'A different run is active.' });
+      if (run.status !== 'running') return Promise.resolve({ ok: true });
       killGroup(run, 'SIGTERM');
-      await new Promise((resolve) => setTimeout(resolve, TERM_GRACE_MS));
-      if (run.status === 'running') killGroup(run, 'SIGKILL');
-      await new Promise((resolve) => setTimeout(resolve, KILL_GRACE_MS));
-      if (run.status === 'running') finish(run, 'killed', null);
-      return { ok: true };
+      return new Promise((resolve) => {
+        let settled = false;
+        const done = (result) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(termTimer);
+          clearTimeout(killTimer);
+          clearInterval(poll);
+          resolve(result);
+        };
+        const poll = setInterval(() => {
+          if (run.status !== 'running') done({ ok: true });
+        }, 100);
+        const termTimer = setTimeout(() => {
+          if (run.status === 'running') killGroup(run, 'SIGTERM');
+        }, TERM_GRACE_MS);
+        const killTimer = setTimeout(() => {
+          if (run.status === 'running') {
+            killGroup(run, 'SIGKILL');
+            // If even SIGKILL did not reap the child, stop claiming it is running.
+            finish(run, 'killed', null);
+          }
+          done({ ok: true });
+        }, TERM_GRACE_MS + KILL_GRACE_MS);
+        run.child.once('exit', () => done({ ok: true }));
+      });
     },
 
     activeState() {
@@ -209,40 +230,40 @@ function createRunManager(baseDir) {
           text = lastNewline !== -1 ? text.slice(0, lastNewline + 1) : '';
         }
         const known = active && active.id === runId ? active.status !== 'running' : true;
-        const capped = active && active.id === runId ? Boolean(active.logCapped) : metaLogCapped(runId);
-        return { logs: text, truncated: truncated || capped, complete: known };
+        const live = active && active.id === runId;
+        const flags = live ? { capped: Boolean(active.logCapped), missing: false } : metaFlags(runId);
+        return { logs: text, truncated: truncated || flags.capped || flags.missing, complete: known };
       } finally {
         fs.closeSync(fd);
       }
     },
 
     shutdown() {
-      // Best-effort synchronous escalation is impossible here (async waits);
-      // terminate the group and let the caller await settle. The exit handler
-      // persists the final state if the process dies in time.
+      // Explicit keep-alive: never unref these timers, shutdown must complete.
+      // Escalate TERM at 3s, force-finish and resolve by 6s so quit is bounded.
       if (active && active.status === 'running') {
-        killGroup(active, 'SIGTERM');
+        const run = active;
+        killGroup(run, 'SIGTERM');
         return new Promise((resolve) => {
-          const run = active;
+          let settled = false;
+          const done = () => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(termTimer);
+            clearTimeout(doneTimer);
+            clearInterval(poll);
+            resolve();
+          };
           const termTimer = setTimeout(() => {
             if (run.status === 'running') killGroup(run, 'SIGKILL');
           }, 3000);
           const doneTimer = setTimeout(() => {
-            clearTimeout(termTimer);
             if (run.status === 'running') finish(run, 'killed', null);
-            resolve();
+            done();
           }, 6000);
-          if (termTimer.unref) termTimer.unref();
-          if (doneTimer.unref) doneTimer.unref();
           const poll = setInterval(() => {
-            if (run.status !== 'running') {
-              clearTimeout(termTimer);
-              clearTimeout(doneTimer);
-              clearInterval(poll);
-              resolve();
-            }
+            if (run.status !== 'running') done();
           }, 100);
-          if (poll.unref) poll.unref();
         });
       }
       return Promise.resolve();

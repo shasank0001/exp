@@ -24,6 +24,7 @@ function createPiEngine({ piPath = 'pi', home, cwd, sessionMode = 'none', sessio
       return;
     }
     collected.push({ kind: parsed.type === 'response' ? 'response' : 'event', event: parsed });
+    if (collected.length > MAX_COLLECTED) collected.splice(0, collected.length - MAX_COLLECTED);
     if (parsed.type !== 'response') {
       for (const listener of listeners) {
         try {
@@ -81,6 +82,8 @@ function createPiEngine({ piPath = 'pi', home, cwd, sessionMode = 'none', sessio
 
   // Guard against a child that emits output without newlines: cap buffered data.
   const MAX_BUFFER = 1024 * 1024;
+  const MAX_COLLECTED = 2000;
+  const MAX_TIMED_OUT = 500;
   const timedOut = new Set();
 
   const engine = {
@@ -151,6 +154,10 @@ function createPiEngine({ piPath = 'pi', home, cwd, sessionMode = 'none', sessio
         const timer = setTimeout(() => {
           pending.delete(id);
           timedOut.add(id);
+          if (timedOut.size > MAX_TIMED_OUT) {
+            // Set preserves insertion order: drop the oldest tracked timeout.
+            timedOut.delete(timedOut.values().next().value);
+          }
           reject(new Error(`timeout waiting for response to ${command.type}`));
         }, timeoutMs);
         pending.set(id, { resolve, reject, timer });

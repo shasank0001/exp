@@ -165,7 +165,8 @@ function createEngineHost({ userDataDir, piPath, emit }) {
     }
     const stat = fs.statSync(projectPath, { throwIfNoEntry: false });
     if (!stat || !stat.isDirectory()) throw new Error('projectPath must be an existing directory');
-    return projectPath;
+    // Canonicalize so /proj, /proj/ and symlink aliases share one trust entry.
+    return fs.realpathSync(projectPath);
   }
 
   function toolLogFile(threadId) {
@@ -448,7 +449,7 @@ function createEngineHost({ userDataDir, piPath, emit }) {
     },
 
     async shutdown() {
-      runs.shutdown();
+      await runs.shutdown();
       const stops = [...adapters.values()].map((slot) => slot.engine.stop().catch(() => {}));
       adapters.clear();
       await Promise.all(stops);
