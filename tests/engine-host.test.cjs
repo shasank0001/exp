@@ -9,11 +9,12 @@ const { createEngineHost, summarizeToolArgs, touchedPath } = require('../desktop
 
 const PI = path.resolve(__dirname, '../node_modules/.bin/pi');
 
-function freshHost() {
+function freshHost(overrides = {}) {
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mlc-host-'));
   const project = fs.mkdtempSync(path.join(os.tmpdir(), 'mlc-hostproj-'));
   const events = [];
-  const host = createEngineHost({ userDataDir, piPath: PI, emit: (e) => events.push(e) });
+  // Point at a missing OpenCode binary so tests never touch network/auth.
+  const host = createEngineHost({ userDataDir, piPath: PI, ocPath: '/nonexistent/oc', emit: (e) => events.push(e), ...overrides });
   return { host, userDataDir, project, events };
 }
 
@@ -21,19 +22,17 @@ test('host: thread lifecycle persists without credentials', async () => {
   const { host, project, events } = freshHost();
   assert.deepEqual(host.listThreads(), []);
   const thread = host.createThread({ title: 'wiring', projectPath: project });
-  assert.equal(thread.engineId, 'pi');
+  assert.equal(thread.engineId, 'opencode');
   assert.deepEqual(host.getMessages(thread.id), []);
   const send = await host.sendPrompt(thread.id, 'Reply with OK only.');
-  assert.equal(send.accepted, false, 'unauthenticated prompt must fail closed');
-  assert.ok(send.error);
+  assert.equal(send.accepted, false, 'missing engine binary must fail closed');
+  assert.equal(send.error, 'OpenCode is not installed. Install it from https://opencode.ai and restart.');
   const kinds = events.map((e) => e.kind);
-  assert.ok(kinds.includes('message'), 'user message event missing');
   assert.ok(kinds.includes('error'), `error event missing: ${kinds.join(',')}`);
-  const authError = events.find((e) => e.kind === 'error');
-  assert.equal(authError.errorType, 'auth');
-  const messages = host.getMessages(thread.id);
-  assert.equal(messages.filter((m) => m.role === 'user').length, 1);
-  assert.equal(messages.filter((m) => m.role === 'assistant').length, 0, 'no fake reply may persist');
+  const engineError = events.find((e) => e.kind === 'error');
+  assert.equal(engineError.errorType, 'unavailable');
+  // A prompt that never reached an engine leaves no transcript behind.
+  assert.deepEqual(host.getMessages(thread.id), []);
   const abort = await host.abortThread(thread.id);
   assert.equal(abort.ok, true);
   await host.shutdown();
@@ -114,14 +113,19 @@ test('host: renames show the new path with a diff', async () => {
   assert.ok(changes.files.some((f) => f.path === 'new name.txt'), `rename target missing: ${JSON.stringify(changes.files.map((f) => f.path))}`);
   await host.shutdown();
 });
-test('host: structured error when Pi binary is missing', async () => {
+test('host: structured error when engine binaries are missing', async () => {
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mlc-host-'));
   const project = fs.mkdtempSync(path.join(os.tmpdir(), 'mlc-hostproj-'));
   const events = [];
-  const host = createEngineHost({ userDataDir, piPath: '/nonexistent/pi', emit: (e) => events.push(e) });
+  const host = createEngineHost({ userDataDir, piPath: '/nonexistent/pi', ocPath: '/nonexistent/oc', emit: (e) => events.push(e) });
   const thread = host.createThread({ title: 't', projectPath: project });
+  assert.equal(thread.engineId, 'opencode');
   const send = await host.sendPrompt(thread.id, 'hi');
   assert.equal(send.accepted, false);
-  assert.equal(send.error, 'Pi is not installed.');
+  assert.equal(send.error, 'OpenCode is not installed. Install it from https://opencode.ai and restart.');
+  const legacy = host.createThread({ title: 'legacy', projectPath: project, engineId: 'pi' });
+  const sendLegacy = await host.sendPrompt(legacy.id, 'hi');
+  assert.equal(sendLegacy.accepted, false);
+  assert.equal(sendLegacy.error, 'Pi is not installed.');
   await host.shutdown();
 });

@@ -8,6 +8,7 @@ const { spawnSync } = require('node:child_process');
 const { createStore, MAX_TEXT } = require('../services/store.cjs');
 const { createRunManager } = require('../services/runs.cjs');
 const { createPiEngine } = require('../engines/pi-adapter.cjs');
+const { createOpenCodeEngine, OPENCODE_DEFAULT_MODEL, classifyError: classifyOcError } = require('../engines/opencode-adapter.cjs');
 
 const THREAD_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const TOOL_SUMMARY_MAX = 300;
@@ -30,6 +31,21 @@ function touchedPath(projectPath, args) {
   const relative = path.relative(projectPath, resolved);
   if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return null;
   return relative;
+}
+
+function resolveOcPath(piPath) {
+  // The OpenCode binary lives outside the repo. An explicit MLCOPILOT_OC_PATH is
+  // authoritative (even when it points nowhere, so tests stay hermetic);
+  // otherwise fall back to PATH lookup.
+  if (process.env.MLCOPILOT_OC_PATH) return process.env.MLCOPILOT_OC_PATH;
+  try {
+    const found = spawnSync('which', ['opencode'], { timeout: 5000, encoding: 'utf8' });
+    const candidate = String(found.stdout || '').trim().split('\n')[0];
+    if (found.status === 0 && candidate && fs.existsSync(candidate)) return candidate;
+  } catch {
+    // Fall through to null: engine reports unavailable with setup guidance.
+  }
+  return null;
 }
 
 function defaultModelFromSettings() {
@@ -78,6 +94,12 @@ function mapPiEvent(threadId, event) {
       // Low-level run completion. Pi 0.73.1 RPC does not reliably emit
       // agent_settled, so the host finalizes on agent_end with willRetry=false.
       return { ...base, kind: 'agent-end', willRetry: Boolean(event.willRetry) };
+    case 'error': {
+      // Raw OpenCode terminal failure (also delivered post-acceptance).
+      // Surfaced as a visible error, never synthesized into a reply.
+      const text = String(event.error && event.error.message || event.message || 'Agent run failed.');
+      return { ...base, kind: 'error', errorType: classifyOcError(text), error: text };
+    }
     case 'extension_ui_request':
       // Approvals UI is a later milestone; never leave the agent hanging, and say so.
       // Surfaced as kind 'error' because that is what the v0.1 renderer displays.
@@ -87,13 +109,17 @@ function mapPiEvent(threadId, event) {
   }
 }
 
-function createEngineHost({ userDataDir, piPath, emit }) {
+function createEngineHost({ userDataDir, piPath, ocPath, emit }) {
   const recordsDir = path.join(userDataDir, 'records');
   const enginesDir = path.join(userDataDir, 'engine-home');
   fs.mkdirSync(recordsDir, { recursive: true });
   fs.mkdirSync(enginesDir, { recursive: true });
   const store = createStore(recordsDir);
   const runs = createRunManager(recordsDir);
+  // OpenCode is the default engine; Pi stays for frozen threads. The binary
+  // lives outside the repo and is resolved once per host lifetime. Tests inject
+  // ocPath directly so unit tests never touch the network or auth.
+  const ocPathResolved = ocPath || resolveOcPath(piPath);
   const adapters = new Map(); // threadId -> { engine, busy, starting, draft, fenced, gotAssistant }
 
   function getThread(threadId) {
@@ -106,18 +132,26 @@ function createEngineHost({ userDataDir, piPath, emit }) {
   async function ensureAdapter(thread) {
     let slot = adapters.get(thread.id);
     if (slot) return slot;
-    slot = { engine: null, busy: false, starting: true, draft: '', fenced: false, expecting: false, gotAssistant: false };
+    slot = { engine: null, busy: false, starting: true, draft: '', fenced: false, gotAssistant: false };
     adapters.set(thread.id, slot);
-    const engine = createPiEngine({
-      piPath,
-      cwd: thread.projectPath,
-      // Sessions are isolated per thread via --session-dir; HOME is inherited so
-      // Pi reads the user's real settings and auth. Never override HOME here:
-      // that would silently switch Pi to a fresh config and a different model.
-      sessionDir: path.join(enginesDir, thread.id, 'sessions'),
-      sessionMode: 'persistent',
-      model: process.env.MLCOPILOT_MODEL || defaultModelFromSettings(),
-    });
+    // Frozen Pi threads keep the Pi adapter; everything new uses OpenCode.
+    const engine = thread.engineId === 'pi'
+      ? createPiEngine({
+        piPath,
+        cwd: thread.projectPath,
+        // Sessions are isolated per thread via --session-dir; HOME is inherited so
+        // Pi reads the user's real settings and auth. Never override HOME here:
+        // that would silently switch Pi to a fresh config and a different model.
+        sessionDir: path.join(enginesDir, thread.id, 'sessions'),
+        sessionMode: 'persistent',
+        model: process.env.MLCOPILOT_MODEL || defaultModelFromSettings(),
+      })
+      : createOpenCodeEngine({
+        ocPath: ocPathResolved,
+        cwd: thread.projectPath,
+        model: process.env.MLCOPILOT_MODEL || OPENCODE_DEFAULT_MODEL,
+        stateDir: path.join(enginesDir, thread.id, 'oc'),
+      });
     slot.engine = engine;
     engine.onEvent((event) => handlePiEvent(thread, slot, event));
     engine.onExit((info) => {
@@ -126,7 +160,7 @@ function createEngineHost({ userDataDir, piPath, emit }) {
       if (adapters.get(thread.id) === slot) adapters.delete(thread.id);
       slot.busy = false;
       slot.starting = false;
-      emit({ threadId: thread.id, kind: 'error', errorType: 'unknown', error: `Pi exited unexpectedly (code=${info.code}, signal=${info.signal}). Your messages are saved; send again to restart it.` });
+      emit({ threadId: thread.id, kind: 'error', errorType: 'unknown', error: `The agent process exited unexpectedly (code=${info.code}, signal=${info.signal}). Your messages are saved; send again to restart it.` });
     });
     try {
       await engine.start();
@@ -349,7 +383,7 @@ function createEngineHost({ userDataDir, piPath, emit }) {
 
   return {
     listThreads: () => store.listThreads(),
-    createThread: ({ title, projectPath }) => store.createThread({ title, projectPath }),
+    createThread: ({ title, projectPath, engineId }) => store.createThread({ title, projectPath, engineId }),
     getMessages: (threadId) => store.getMessages(getThread(threadId).id),
     getTrust: (projectPath) => {
       checkProjectPath(projectPath);
@@ -387,7 +421,9 @@ function createEngineHost({ userDataDir, piPath, emit }) {
       try {
         slot = await ensureAdapter(thread);
       } catch (error) {
-        const failure = error.code === 'PI_NOT_FOUND' ? 'Pi is not installed.' : String((error && error.message) || error);
+        const failure = error.code === 'PI_NOT_FOUND' ? 'Pi is not installed.'
+          : error.code === 'OC_NOT_FOUND' ? 'OpenCode is not installed. Install it from https://opencode.ai and restart.'
+          : String((error && error.message) || error);
         emit({ threadId, kind: 'error', errorType: 'unavailable', error: failure });
         return { accepted: false, error: failure };
       }
@@ -433,18 +469,21 @@ function createEngineHost({ userDataDir, piPath, emit }) {
     },
 
     getEngineState() {
-      if (!piPath || !fs.existsSync(piPath)) {
-        return { available: false, error: 'Pi binary not found. Install @mariozechner/pi-coding-agent and restart.' };
+      // Reports the default (OpenCode) engine. Pi threads keep working but new
+      // threads use OpenCode; per-thread engine comes from the thread record.
+      const ocPath = ocPathResolved;
+      if (!ocPath || !fs.existsSync(ocPath)) {
+        return { available: false, error: 'OpenCode binary not found. Install it from https://opencode.ai and restart.' };
       }
       try {
-        const probe = spawnSync(piPath, ['--version'], { timeout: 10000, encoding: 'utf8' });
+        const probe = spawnSync(ocPath, ['--version'], { timeout: 10000, encoding: 'utf8' });
         const version = String(probe.stdout || probe.stderr || '').trim().split('\n')[0];
-        if (probe.status !== 0) return { available: false, error: 'Pi binary failed to run.' };
-        const model = process.env.MLCOPILOT_MODEL || defaultModelFromSettings();
-        const provider = model && model.includes('/') ? model.split('/')[0] : undefined;
-        return { available: true, version: version || 'unknown', provider };
+        if (probe.status !== 0) return { available: false, error: 'OpenCode binary failed to run.' };
+        const model = process.env.MLCOPILOT_MODEL || OPENCODE_DEFAULT_MODEL;
+        const provider = model.includes('/') ? model.split('/')[0] : undefined;
+        return { available: true, version: version || 'unknown', provider, engine: 'opencode', model };
       } catch {
-        return { available: false, error: 'Pi binary failed to run.' };
+        return { available: false, error: 'OpenCode binary failed to run.' };
       }
     },
 

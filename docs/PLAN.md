@@ -66,6 +66,15 @@ Training supervision, TensorBoard/GPU telemetry, dataset/checkpoint tools, multi
   (Pi 0.73.1 RPC does not reliably emit `agent_settled`); empty model replies
   surface an honest error; dead prototype host files removed; `test:e2e` script
   added; single-instance lock in main.
+- Engine switch (Phase A): OpenCode is the default engine via `run --format json`
+  on the free Zen model; Pi adapter frozen for legacy threads. Verified by probe:
+  headless `ask` auto-rejects (fail-closed, surfaced as events); OpenCode hides
+  tools carrying any deny rule (confinement via `external_directory: ask`, not
+  deny catch-alls); `enabled:false` and `server_*`/`tools.server.*` globs do NOT
+  remove MCP servers — only `*server*` tool globs do; spawn must set PWD
+  explicitly (OpenCode resolves its project root from PWD, not the process cwd).
+  MCP servers from the user config are neutralized per run; `execute` is a
+  confined codeless runtime (no FS write, escape probe passed).
 - Live end-to-end through the real app (OpenRouter nex-mini): prompt accepted,
   exact reply streamed, persisted, and settled.
 - Milestone 3 (change visibility + trust): per-project trust gate with provider

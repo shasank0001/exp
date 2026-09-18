@@ -62,9 +62,9 @@ footer{margin-top:70px;padding-top:24px;border-top:1px solid var(--line);color:v
 <header class="hero">
 <div class="eyebrow">ML Copilot · System architecture · v0.3</div>
 <h1>One workspace,<br>three privilege zones.</h1>
-<p>A sandboxed UI that can only ask. A privileged main process that owns projects, threads, and processes. And a real coding agent — Pi — connected over a strict JSON protocol, with every byte of its activity recorded.</p>
+<p>A sandboxed UI that can only ask. A privileged main process that owns projects, threads, and processes. And a real coding agent — OpenCode on the free Zen model (Pi kept for legacy threads) — connected over newline-delimited JSON, with every byte of its activity recorded.</p>
 <div style="margin-top:16px">
-<span class="pill ok">20/20 unit tests</span><span class="pill ok">Live provider verified</span><span class="pill acc">Electron + React + Pi RPC</span><span class="pill">Linux first</span>
+<span class="pill ok">28/28 unit tests</span><span class="pill ok">Live provider verified</span><span class="pill acc">Electron + React + OpenCode</span><span class="pill">Linux first</span>
 </div>
 </header>
 
@@ -150,8 +150,8 @@ footer{margin-top:70px;padding-top:24px;border-top:1px solid var(--line);color:v
 </section>
 
 <section id="adapter">
-<h2><span class="n">04</span>Pi adapter — the swappable seam</h2>
-<p class="sub">Spawns the pinned Pi binary in RPC mode and translates its protocol into the app's event kinds. This is the seam another engine (Codex, Claude) would plug into.</p>
+<h2><span class="n">04</span>Engine adapters — the swappable seam</h2>
+<p class="sub">OpenCode is the default engine (<span class="code inline">run --format json</span>, one-shot per prompt, sessions resumed via id); Pi stays frozen for legacy threads. Both speak through one host interface, so a future ACP-native engine plugs in without touching the UI.</p>
 <div class="card">
 <svg class="diagram" viewBox="0 0 900 200" role="img" aria-label="Sequence: renderer sendPrompt, host persists user message, adapter prompt accepted, Pi streams deltas and tool events, agent-end finalizes, assistant message persisted, settled emitted">
 <line x1="120" y1="20" x2="120" y2="190" stroke="#e7e0d5"/><text x="120" y="14" font-size="11" fill="#8a8178" text-anchor="middle">UI</text>
@@ -166,9 +166,9 @@ footer{margin-top:70px;padding-top:24px;border-top:1px solid var(--line);color:v
 <line x1="330" y1="165" x2="120" y2="165" stroke="#5f7f66" stroke-width="1.5" marker-end="url(#ah)"/><text x="225" y="159" font-size="10" fill="#5f7f66" text-anchor="middle">message · settled</text>
 </svg>
 </div>
-<div class="card"><h3>Protocol facts (verified against Pi 0.73.1)</h3><p>
-<span class="pill ok">Strict LF JSONL framing</span><span class="pill ok">Request/response id correlation</span><span class="pill ok">prompt / abort / get_state</span><span class="pill ok">Auth failures classified</span><span class="pill warn">agent_settled unreliable → finalize on agent_end</span><span class="pill warn">Approval requests auto-declined, shown as error</span>
-</p><p>Sessions persist per thread via <span class="code inline">--session-dir</span>; HOME is inherited so Pi reads the user's real settings and auth. Model resolves from <span class="code inline">MLCOPILOT_MODEL</span> or Pi's configured default (OpenRouter <span class="code inline">nex-agi/nex-n2.5-mini:free</span>).</p></div>
+<div class="card"><h3>Protocol facts (verified by probe)</h3><p>
+<span class="pill ok">Newline JSON events: step / text / tool_use</span><span class="pill ok">Session resume via id</span><span class="pill ok">Headless ask auto-rejects</span><span class="pill ok">Auth/routing failures classified</span><span class="pill warn">Tools with deny rules are hidden — confine via external_directory</span><span class="pill warn">Approval requests need ACP (Phase B)</span>
+</p><p>Each thread gets a restrictive permission set via environment (edits allowed, outside-project paths rejected, shell allowlisted, user MCP servers neutralized). Sessions persist per thread; HOME is inherited so the engine reads the user's real auth. Default model: OpenCode Zen free tier.</p></div>
 </section>
 
 <section id="runs">

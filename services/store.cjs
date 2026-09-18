@@ -47,12 +47,15 @@ function createStore(baseDir) {
     listThreads() {
       return readThreads().sort((a, b) => b.updatedAt - a.updatedAt);
     },
-    createThread({ title, projectPath }) {
+    createThread({ title, projectPath, engineId }) {
       if (typeof title !== 'string' || !title.trim() || title.length > 200) {
         throw new Error('title must be 1-200 characters');
       }
       if (typeof projectPath !== 'string' || !path.isAbsolute(projectPath)) {
         throw new Error('projectPath must be absolute');
+      }
+      if (engineId !== undefined && engineId !== 'pi' && engineId !== 'opencode') {
+        throw new Error('engineId must be pi or opencode');
       }
       const stat = fs.statSync(projectPath, { throwIfNoEntry: false });
       if (!stat || !stat.isDirectory()) throw new Error('projectPath must be an existing directory');
@@ -61,7 +64,7 @@ function createStore(baseDir) {
         id: newId('th'),
         title: title.trim(),
         projectPath,
-        engineId: 'pi',
+        engineId: engineId || 'opencode',
         createdAt: now,
         updatedAt: now,
       };

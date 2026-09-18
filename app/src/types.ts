@@ -4,7 +4,7 @@ export interface Thread {
   id: string;
   title: string;
   projectPath: string;
-  engineId: 'pi' | 'test';
+  engineId: 'pi' | 'opencode' | 'test';
   createdAt: number;
   updatedAt: number;
 }

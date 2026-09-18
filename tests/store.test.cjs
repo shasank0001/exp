@@ -16,10 +16,12 @@ test('threads persist and list newest-first', () => {
   assert.deepEqual(store.listThreads(), []);
   const a = store.createThread({ title: ' first ', projectPath: project });
   assert.equal(a.title, 'first');
-  assert.equal(a.engineId, 'pi');
+  assert.equal(a.engineId, 'opencode');
+  const frozen = store.createThread({ title: 'legacy', projectPath: project, engineId: 'pi' });
+  assert.equal(frozen.engineId, 'pi');
+  assert.throws(() => store.createThread({ title: 'x', projectPath: project, engineId: 'nope' }), /engineId/);
   const reopened = createStore(dir);
-  assert.equal(reopened.listThreads().length, 1);
-  assert.equal(reopened.listThreads()[0].id, a.id);
+  assert.deepEqual(reopened.listThreads().map((t) => t.id).sort(), [a.id, frozen.id].sort());
 });
 
 test('createThread validates input', () => {
