@@ -9,6 +9,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const OPENCODE_DEFAULT_MODEL = 'opencode/muse-spark-1.3-contributor-free';
+const OC_PROMPT_TIMEOUT_MS = 1800000; // 30 minutes: free-tier research runs take a while
 const MAX_BUFFER = 1024 * 1024;
 const MAX_COLLECTED = 2000;
 
@@ -183,7 +184,7 @@ function createOpenCodeEngine({ ocPath = 'opencode', cwd, model, stateDir } = {}
     if (collected.length > MAX_COLLECTED) collected.splice(0, collected.length - MAX_COLLECTED);
   }
 
-  // Event types consumed by translateOcEvent below. onLine skips listener delivery
+  // Event types consumed by translateOcEvent (module scope, above). onLine skips
   // for these so each is delivered exactly once, in translated form.
   const TRANSLATED = new Set(['text', 'tool_use', 'error']);
 
@@ -254,7 +255,8 @@ function createOpenCodeEngine({ ocPath = 'opencode', cwd, model, stateDir } = {}
     // working (first text/tool event), reject on early error events or a bad
     // exit. Completion (or failure) always surfaces later as agent_end, so the
     // host can never wedge busy. Overall timeout kills a stuck run.
-    sendPrompt(message, timeoutMs = 600000) {
+    // Default 30 minutes: free-tier research runs legitimately take a while.
+    sendPrompt(message, timeoutMs = OC_PROMPT_TIMEOUT_MS) {
       if (child) return Promise.reject(new Error('a prompt is already running'));
       return new Promise((resolve) => {
         let accepted = false;
@@ -264,11 +266,21 @@ function createOpenCodeEngine({ ocPath = 'opencode', cwd, model, stateDir } = {}
           if (accepted && result.ok !== false) return;
           accepted = true;
           clearTimeout(acceptTimer);
+          if (result.errorType === 'session') {
+            // Stored session is stale server-side: drop it so the next prompt
+            // starts fresh instead of failing the same way forever.
+            sessionId = null;
+            if (stateDir) {
+              try { fs.unlinkSync(path.join(stateDir, 'oc-session.json')); } catch { /* best effort */ }
+            }
+          }
           if (result.ok === false && child) {
             // Early rejection must not leave a zombie: the host considers this
             // slot idle, so no one else will reap the process.
+            engine.cancelCurrent = null;
             try { child.kill('SIGTERM'); } catch { /* already gone */ }
-            setTimeout(() => { try { child && child.kill('SIGKILL'); } catch { /* already gone */ } }, 5000);
+            const grace = setTimeout(() => { try { child && child.kill('SIGKILL'); } catch { /* already gone */ } }, 5000);
+            if (grace.unref) grace.unref();
           }
           resolve(result);
         };
@@ -307,7 +319,13 @@ function createOpenCodeEngine({ ocPath = 'opencode', cwd, model, stateDir } = {}
           done({ ok: true });
         }, 30000);
         const timer = setTimeout(() => {
+          if (!child) return; // already exited; exit handler finalized everything
           engine.cancelCurrent();
+          const timeoutEvent = { type: 'agent_timeout', timeoutMs };
+          push({ kind: 'event', event: timeoutEvent });
+          for (const listener of listeners) {
+            try { listener(timeoutEvent); } catch { /* never break framing */ }
+          }
           emitAgentEnd();
           done({ ok: false, errorType: 'timeout', error: 'Prompt timed out.' });
         }, timeoutMs);
@@ -336,13 +354,16 @@ function createOpenCodeEngine({ ocPath = 'opencode', cwd, model, stateDir } = {}
               }
               continue;
             }
-            translateOcEvent(raw, (piShaped) => {
+            // Acceptance requires evidence of work (translated content), not
+            // mere lifecycle noise: a run emitting only step_start stays
+            // unaccepted until the accept window or timeout decides.
+            const consumed = translateOcEvent(raw, (piShaped) => {
               push({ kind: 'event', event: piShaped });
               for (const listener of listeners) {
                 try { listener(piShaped); } catch { /* never break framing */ }
               }
             });
-            if (!accepted) done({ ok: true });
+            if (!accepted && consumed) done({ ok: true });
           }
         });
         proc.stderr.on('data', (chunk) => {
@@ -402,4 +423,4 @@ function createOpenCodeEngine({ ocPath = 'opencode', cwd, model, stateDir } = {}
   return engine;
 }
 
-module.exports = { createOpenCodeEngine, permissionConfig, classifyError, translateOcEvent, OPENCODE_DEFAULT_MODEL };
+module.exports = { createOpenCodeEngine, permissionConfig, classifyError, translateOcEvent, OPENCODE_DEFAULT_MODEL, OC_PROMPT_TIMEOUT_MS };

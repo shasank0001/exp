@@ -129,3 +129,14 @@ test('host: structured error when engine binaries are missing', async () => {
   assert.equal(sendLegacy.error, 'Pi is not installed.');
   await host.shutdown();
 });
+
+test('host: agent_timeout maps to an internal run marker', () => {
+  const { mapPiEvent } = require('../desktop/engine-host.cjs');
+  assert.deepEqual(mapPiEvent('th_x', { type: 'agent_timeout' }), { threadId: 'th_x', kind: 'agent-timeout' });
+});
+
+test('host: lifecycle event types are activity-logged, deltas are not', () => {
+  const { mapPiEvent } = require('../desktop/engine-host.cjs');
+  assert.equal(mapPiEvent('th_x', { type: 'step_finish', reason: 'stop' }), null);
+  assert.equal(mapPiEvent('th_x', { type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: 'hmm' } }), null);
+});

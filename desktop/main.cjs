@@ -17,10 +17,22 @@ if (!app.requestSingleInstanceLock()) {
   console.error('Another ML Copilot instance is already running.');
   app.quit();
 } else {
+function sameEntry(url) {
+  // Compare origin + path instead of exact strings so a query/hash can never
+  // brick IPC, while a different page still fails closed.
+  try {
+    const a = new URL(url);
+    const b = new URL(entry);
+    return a.protocol === b.protocol && a.host === b.host && a.pathname === b.pathname;
+  } catch {
+    return false;
+  }
+}
+
 function senderIsEntry(event) {
   return event.sender === mainWindow.webContents
     && event.senderFrame === mainWindow.webContents.mainFrame
-    && event.senderFrame.url === entry;
+    && sameEntry(event.senderFrame.url);
 }
 
 app.whenReady().then(async () => {
@@ -70,7 +82,9 @@ app.whenReady().then(async () => {
   mainWindow.webContents.on('will-navigate', (event) => event.preventDefault());
   mainWindow.webContents.on('will-frame-navigate', (event, details) => {
     const target = details?.url || event.url;
-    if (target !== entry && target !== prototype) event.preventDefault();
+    // The prototype gallery is a dev-only escape hatch; production frames stay
+    // pinned to the built renderer entry.
+    if (DEV_URL ? target !== entry && target !== prototype : target !== entry) event.preventDefault();
   });
 
   ipcMain.handle('runtime:info', (event) => {

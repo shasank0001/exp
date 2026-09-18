@@ -150,8 +150,12 @@ function createRunManager(baseDir) {
       });
       run.timer = setTimeout(() => {
         if (run.status !== 'running') return;
-        killGroup(run, 'SIGKILL');
-        finish(run, 'timeout', null);
+        // Escalate like stop(): TERM first so checkpoints flush, KILL after grace.
+        killGroup(run, 'SIGTERM');
+        setTimeout(() => {
+          if (run.status === 'running') killGroup(run, 'SIGKILL');
+          finish(run, 'timeout', null);
+        }, TERM_GRACE_MS);
       }, WALL_TIME_MS);
       // Do not keep the app alive just for a run's wall-time timer.
       if (run.timer.unref) run.timer.unref();

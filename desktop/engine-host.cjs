@@ -8,7 +8,7 @@ const { spawnSync } = require('node:child_process');
 const { createStore, MAX_TEXT } = require('../services/store.cjs');
 const { createRunManager } = require('../services/runs.cjs');
 const { createPiEngine } = require('../engines/pi-adapter.cjs');
-const { createOpenCodeEngine, OPENCODE_DEFAULT_MODEL, classifyError: classifyOcError } = require('../engines/opencode-adapter.cjs');
+const { createOpenCodeEngine, OPENCODE_DEFAULT_MODEL, OC_PROMPT_TIMEOUT_MS, classifyError: classifyOcError } = require('../engines/opencode-adapter.cjs');
 
 const THREAD_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const TOOL_SUMMARY_MAX = 300;
@@ -94,6 +94,10 @@ function mapPiEvent(threadId, event) {
       // Low-level run completion. Pi 0.73.1 RPC does not reliably emit
       // agent_settled, so the host finalizes on agent_end with willRetry=false.
       return { ...base, kind: 'agent-end', willRetry: Boolean(event.willRetry) };
+    case 'agent_timeout':
+      // Internal adapter signal, not a bridge kind: marks the slot so
+      // finalizeRun can say the run was killed instead of completed.
+      return { ...base, kind: 'agent-timeout' };
     case 'error': {
       // Raw OpenCode terminal failure (also delivered post-acceptance).
       // Surfaced as a visible error, never synthesized into a reply.
@@ -120,7 +124,7 @@ function createEngineHost({ userDataDir, piPath, ocPath, emit }) {
   // lives outside the repo and is resolved once per host lifetime. Tests inject
   // ocPath directly so unit tests never touch the network or auth.
   const ocPathResolved = ocPath || resolveOcPath(piPath);
-  const adapters = new Map(); // threadId -> { engine, busy, starting, draft, fenced, gotAssistant }
+  const adapters = new Map(); // threadId -> { engine, busy, starting, draft, fenced, gotAssistant, timedOut }
 
   function getThread(threadId) {
     if (!THREAD_ID_PATTERN.test(threadId || '')) throw new Error('invalid thread id');
@@ -325,12 +329,36 @@ function createEngineHost({ userDataDir, piPath, ocPath, emit }) {
     }
   }
 
+  // Lifecycle event types worth keeping in the activity log even though they
+  // carry no transcript content (subagent/nested work shows up here, not in
+  // tool calls). Streaming deltas and progress updates stay out to avoid flood.
+  const ACTIVITY_TYPES = new Set([
+    'step_start', 'step_finish', 'turn_start', 'agent_start',
+    'compaction_start', 'compaction_end', 'queue_update',
+  ]);
+
+  function activitySummary(event) {
+    const interesting = {};
+    for (const key of ['reason', 'status', 'stopReason', 'tool', 'title']) {
+      const value = event[key] ?? (event.part && event.part[key]);
+      if (typeof value === 'string' && value) interesting[key] = value;
+    }
+    const text = JSON.stringify(interesting);
+    return text.length > 2 ? text : event.type;
+  }
+
   function handlePiEvent(thread, slot, event) {
     // The activity log records what actually happened, even for fenced runs.
+    // (Lifecycle rows below are likewise unfenced: the log is a record of the
+    // process, while fencing only gates transcript/UI state.)
     recordRawToolEvent(thread, event);
     // Ignore late events from a previous generation (after abort or crash).
     if (slot.fenced || adapters.get(thread.id) !== slot) return;
     const mapped = mapPiEvent(thread.id, event);
+    if (mapped && mapped.kind === 'agent-timeout') {
+      slot.timedOut = true;
+      return;
+    }
     if (mapped && mapped.kind === 'approval-pending') {
       // No approval UI yet: decline so the run continues visibly, and say so
       // through the error channel the renderer displays.
@@ -338,7 +366,15 @@ function createEngineHost({ userDataDir, piPath, ocPath, emit }) {
       emit({ threadId: thread.id, kind: 'error', errorType: 'unknown', error: `The agent asked for approval (“${mapped.title}”). It was declined automatically because approval UI is not implemented yet.` });
       return;
     }
-    if (!mapped) return;
+    if (!mapped) {
+      // Unmapped but activity-worthy lifecycle events (e.g. nested subagent
+      // steps) go to the tool log so research-style runs stay visible.
+      // Anything else (deltas, progress) stays silent to avoid flooding.
+      if (event && ACTIVITY_TYPES.has(event.type)) {
+        recordTool(thread.id, { tool: `agent:${event.type}`, summary: activitySummary(event), isError: false });
+      }
+      return;
+    }
     if (mapped.kind === 'text-delta') {
       slot.draft += mapped.delta;
       slot.gotAssistant = true;
@@ -367,6 +403,8 @@ function createEngineHost({ userDataDir, piPath, ocPath, emit }) {
   }
 
   function finalizeRun(thread, slot) {
+    if (slot.finalized) return; // agent_end and settled both arrive on some engines
+    slot.finalized = true;
     // If deltas arrived without a message_end (provider quirk), persist the draft.
     if (slot.draft.trim()) {
       const saved = store.appendMessage(thread.id, { role: 'assistant', text: slot.draft });
@@ -375,7 +413,9 @@ function createEngineHost({ userDataDir, piPath, ocPath, emit }) {
       slot.gotAssistant = true;
     }
     slot.busy = false;
-    if (!slot.gotAssistant) {
+    if (slot.timedOut) {
+      emit({ threadId: thread.id, kind: 'error', errorType: 'timeout', error: `Agent run timed out after ${OC_PROMPT_TIMEOUT_MS / 60000} minutes and was stopped. Anything above is a partial reply — send a follow-up to resume where it left off (session kept).` });
+    } else if (!slot.gotAssistant) {
       emit({ threadId: thread.id, kind: 'error', errorType: 'unknown', error: 'The model finished without producing a reply. Try again or switch models.' });
     }
     emit({ threadId: thread.id, kind: 'settled' });
@@ -434,6 +474,8 @@ function createEngineHost({ userDataDir, piPath, ocPath, emit }) {
       slot.draft = '';
       slot.fenced = false;
       slot.gotAssistant = false;
+      slot.timedOut = false;
+      slot.finalized = false;
       let result;
       try {
         result = await slot.engine.sendPrompt(text.trim());
@@ -445,7 +487,11 @@ function createEngineHost({ userDataDir, piPath, ocPath, emit }) {
       }
       if (!result.ok) {
         slot.busy = false;
-        emit({ threadId, kind: 'error', errorType: result.errorType || 'unknown', error: result.error || 'Prompt rejected.' });
+        // If the run already finalized (fast empty exit), its error is already
+        // shown; don't pile a second mismatched error on the composer.
+        if (!slot.finalized) {
+          emit({ threadId, kind: 'error', errorType: result.errorType || 'unknown', error: result.error || 'Prompt rejected.' });
+        }
         return { accepted: false, error: result.error || 'Prompt rejected.' };
       }
       return { accepted: true };

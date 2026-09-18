@@ -24,6 +24,7 @@ test('opencode adapter: default model and permission policy shape', () => {
   assert.equal(policy.permission.edit, 'allow');
   assert.equal(policy.permission.bash['rm *'], 'deny');
   assert.equal(policy.permission.external_directory, 'ask');
+  assert.equal(policy.tools['*arxiv*'], false);
 });
 
 test('opencode adapter: error classification', () => {
@@ -166,5 +167,25 @@ test('opencode adapter: abort kills a slow run', async () => {
     }, 100);
   });
   assert.ok(seen.some((e) => e.type === 'agent_end'), 'abort must still finalize');
+  await engine.stop();
+});
+
+test('opencode adapter: timeout kills and finalizes', async () => {
+  const stub = writeStub('slow');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mlc-ocflow-'));
+  const engine = createOpenCodeEngine({ ocPath: stub, cwd: dir, stateDir: path.join(dir, 'state') });
+  await engine.start();
+  const seen = [];
+  engine.onEvent((e) => seen.push(e));
+  const result = await engine.sendPrompt('hello', 1500);
+  assert.equal(result.ok, false);
+  assert.equal(result.errorType, 'timeout');
+  await new Promise((resolve) => {
+    const started = Date.now();
+    const poll = setInterval(() => {
+      if (seen.some((e) => e.type === 'agent_end') || Date.now() - started > 10000) { clearInterval(poll); resolve(); }
+    }, 50);
+  });
+  assert.ok(seen.some((e) => e.type === 'agent_end'), 'timeout must still finalize');
   await engine.stop();
 });

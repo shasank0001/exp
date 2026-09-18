@@ -43,7 +43,7 @@ export interface ChangesResult {
   touched: string[];
 }
 
-export type EngineErrorType = 'auth' | 'quota' | 'session' | 'unknown' | 'unavailable';
+export type EngineErrorType = 'auth' | 'quota' | 'session' | 'timeout' | 'unknown' | 'unavailable';
 
 export type EngineEvent =
   | { threadId: string; kind: 'text-delta'; delta: string }

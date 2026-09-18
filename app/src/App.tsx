@@ -169,7 +169,8 @@ export default function App() {
           const prefix =
             event.errorType === 'auth' ? 'Authentication needed: ' :
             event.errorType === 'unavailable' ? 'Engine unavailable: ' :
-            event.errorType === 'quota' ? 'Quota limit: ' : '';
+            event.errorType === 'quota' ? 'Quota limit: ' :
+            event.errorType === 'timeout' ? 'Timed out: ' : '';
           setEngineError(`${prefix}${event.error}`);
           streamRef.current = '';
           setStreamingText('');
