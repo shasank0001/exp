@@ -45,7 +45,7 @@ export default function Composer(props: ComposerProps) {
             <span className="composer-meta">Local · no cloud sync</span>
             <div className="row">
               {streaming ? (
-                <button className="btn" onClick={onAbort}>Stop</button>
+                <button className="btn" onClick={onAbort} aria-label="Stop the agent">Stop</button>
               ) : (
                 <button
                   className="send"
@@ -60,7 +60,7 @@ export default function Composer(props: ComposerProps) {
           </div>
         </div>
         <div className="composer-footnote">
-          <span>You approve new compute.</span>
+          <span>Approval review UI coming soon.</span>
           <span className="enter-hint"><kbd>↵</kbd> send · Shift+↵ newline</span>
         </div>
       </div>

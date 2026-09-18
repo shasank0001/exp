@@ -2,6 +2,7 @@ import type { EngineEvent, EngineState, Message, Thread } from './src/types';
 
 /** Preload-exposed engine bridge. All methods return promises. No Node access. */
 interface MlCopilotBridge {
+  runtimeInfo(): Promise<{ electron: string; platform: string; mode: string }>;
   pickProject(): Promise<{ path: string } | { cancelled: true }>;
   listThreads(): Promise<Thread[]>;
   createThread(args: { title: string; projectPath: string }): Promise<Thread>;

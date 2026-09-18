@@ -8,8 +8,7 @@ test('serves only desktop and prototype assets over the app scheme', () => {
   assert.match(CSP, /^default-src 'none'/);
   assert.equal(ROOT_URL, 'mlcopilot://app');
   const ok = rel => resolveAsset(`${ROOT_URL}/${rel}`, root);
-  assert.equal(ok('desktop/index.html'), path.join(root, 'desktop/index.html'));
-  assert.equal(ok('desktop/host.js'), path.join(root, 'desktop/host.js'));
+  assert.equal(ok('desktop/preload.cjs'), null, 'main/preload code must never be served');
   assert.equal(ok('variants/01-thread.html'), path.join(root, 'variants/01-thread.html'));
   assert.equal(ok('variants/shared.css'), path.join(root, 'variants/shared.css'));
   for (const denied of ['package.json', 'desktop/main.cjs', 'desktop/preload.cjs', 'docs/PLAN.md', 'variants/../desktop/main.cjs', 'desktop/../.git/config', 'secret.txt', '%2e%2e/package.json', 'desktop/index.html?x=1']) {

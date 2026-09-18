@@ -12,6 +12,10 @@ const prototype = `${ROOT_URL}/variants/01-thread.html`;
 let mainWindow;
 let host;
 
+if (!app.requestSingleInstanceLock()) {
+  console.error('Another ML Copilot instance is already running.');
+  app.quit();
+} else {
 function senderIsEntry(event) {
   return event.sender === mainWindow.webContents
     && event.senderFrame === mainWindow.webContents.mainFrame
@@ -101,6 +105,7 @@ app.whenReady().then(async () => {
 
   await mainWindow.loadURL(entry);
 }).catch((error) => { console.error('Desktop startup failed:', error); app.exit(1); });
+} // end single-instance primary branch
 
 app.on('before-quit', async (event) => {
   if (!host) return;

@@ -3,11 +3,24 @@
 // The renderer never touches the filesystem, processes, or credentials.
 const path = require('node:path');
 const fs = require('node:fs');
+const os = require('node:os');
 const { spawnSync } = require('node:child_process');
 const { createStore, MAX_TEXT } = require('../services/store.cjs');
 const { createPiEngine } = require('../engines/pi-adapter.cjs');
 
 const THREAD_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+
+function defaultModelFromSettings() {
+  // The Pi process inherits the user's HOME, so it reads this same file; mirroring
+  // the default here lets the app pass --model explicitly and stay honest about it.
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.pi', 'agent', 'settings.json'), 'utf8'));
+    if (typeof raw.defaultModel === 'string' && raw.defaultModel.trim()) return raw.defaultModel.trim();
+  } catch {
+    // No settings or unreadable: Pi falls back to its built-in default.
+  }
+  return undefined;
+}
 
 function mapPiEvent(threadId, event) {
   const base = { threadId };
@@ -39,6 +52,10 @@ function mapPiEvent(threadId, event) {
       return null;
     case 'agent_settled':
       return { ...base, kind: 'settled' };
+    case 'agent_end':
+      // Low-level run completion. Pi 0.73.1 RPC does not reliably emit
+      // agent_settled, so the host finalizes on agent_end with willRetry=false.
+      return { ...base, kind: 'agent-end', willRetry: Boolean(event.willRetry) };
     case 'extension_ui_request':
       // Approvals UI is a later milestone; never leave the agent hanging, and say so.
       // Surfaced as kind 'error' because that is what the v0.1 renderer displays.
@@ -54,7 +71,7 @@ function createEngineHost({ userDataDir, piPath, emit }) {
   fs.mkdirSync(recordsDir, { recursive: true });
   fs.mkdirSync(enginesDir, { recursive: true });
   const store = createStore(recordsDir);
-  const adapters = new Map(); // threadId -> { engine, busy, starting, draft, fenced }
+  const adapters = new Map(); // threadId -> { engine, busy, starting, draft, fenced, gotAssistant }
 
   function getThread(threadId) {
     if (!THREAD_ID_PATTERN.test(threadId || '')) throw new Error('invalid thread id');
@@ -66,14 +83,17 @@ function createEngineHost({ userDataDir, piPath, emit }) {
   async function ensureAdapter(thread) {
     let slot = adapters.get(thread.id);
     if (slot) return slot;
-    slot = { engine: null, busy: false, starting: true, draft: '', fenced: false };
+    slot = { engine: null, busy: false, starting: true, draft: '', fenced: false, expecting: false, gotAssistant: false };
     adapters.set(thread.id, slot);
     const engine = createPiEngine({
       piPath,
       cwd: thread.projectPath,
-      home: path.join(enginesDir, thread.id),
+      // Sessions are isolated per thread via --session-dir; HOME is inherited so
+      // Pi reads the user's real settings and auth. Never override HOME here:
+      // that would silently switch Pi to a fresh config and a different model.
+      sessionDir: path.join(enginesDir, thread.id, 'sessions'),
       sessionMode: 'persistent',
-      model: process.env.MLCOPILOT_MODEL || undefined,
+      model: process.env.MLCOPILOT_MODEL || defaultModelFromSettings(),
     });
     slot.engine = engine;
     engine.onEvent((event) => handlePiEvent(thread, slot, event));
@@ -109,6 +129,7 @@ function createEngineHost({ userDataDir, piPath, emit }) {
     if (!mapped) return;
     if (mapped.kind === 'text-delta') {
       slot.draft += mapped.delta;
+      slot.gotAssistant = true;
       emit(mapped);
       return;
     }
@@ -116,20 +137,36 @@ function createEngineHost({ userDataDir, piPath, emit }) {
       const saved = store.appendMessage(thread.id, { role: 'assistant', text: mapped.text });
       emit({ threadId: thread.id, kind: 'message', message: saved });
       slot.draft = '';
+      slot.gotAssistant = true;
+      return;
+    }
+    if (mapped.kind === 'tool-start' || mapped.kind === 'tool-update' || mapped.kind === 'tool-end') {
+      slot.gotAssistant = true;
+    }
+    if (mapped.kind === 'agent-end' && mapped.willRetry === false) {
+      finalizeRun(thread, slot);
       return;
     }
     if (mapped.kind === 'settled') {
-      // If deltas arrived without a message_end (provider quirk), persist the draft.
-      if (slot.draft.trim()) {
-        const saved = store.appendMessage(thread.id, { role: 'assistant', text: slot.draft });
-        emit({ threadId: thread.id, kind: 'message', message: saved });
-        slot.draft = '';
-      }
-      slot.busy = false;
-      emit(mapped);
+      finalizeRun(thread, slot);
       return;
     }
     emit(mapped);
+  }
+
+  function finalizeRun(thread, slot) {
+    // If deltas arrived without a message_end (provider quirk), persist the draft.
+    if (slot.draft.trim()) {
+      const saved = store.appendMessage(thread.id, { role: 'assistant', text: slot.draft });
+      emit({ threadId: thread.id, kind: 'message', message: saved });
+      slot.draft = '';
+      slot.gotAssistant = true;
+    }
+    slot.busy = false;
+    if (!slot.gotAssistant) {
+      emit({ threadId: thread.id, kind: 'error', errorType: 'unknown', error: 'The model finished without producing a reply. Try again or switch models.' });
+    }
+    emit({ threadId: thread.id, kind: 'settled' });
   }
 
   return {
@@ -156,6 +193,7 @@ function createEngineHost({ userDataDir, piPath, emit }) {
       slot.busy = true;
       slot.draft = '';
       slot.fenced = false;
+      slot.gotAssistant = false;
       let result;
       try {
         result = await slot.engine.sendPrompt(text.trim());

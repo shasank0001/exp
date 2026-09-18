@@ -28,7 +28,9 @@ export default function App() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
+  const [runtime, setRuntime] = useState<{ electron: string; platform: string; mode: string } | null>(null);
   const streamRef = useRef('');
+  const activeRef = useRef<string | null>(null);
 
   const activeThread = threads?.find((t) => t.id === activeThreadId) ?? null;
 
@@ -80,13 +82,16 @@ export default function App() {
   useEffect(() => {
     void refreshEngine();
     void refreshThreads();
+    getBridge()?.runtimeInfo().then(setRuntime).catch(() => {});
   }, [refreshEngine, refreshThreads]);
 
   useEffect(() => {
+    activeRef.current = activeThreadId;
     if (activeThreadId) {
       streamRef.current = '';
       setStreamingText('');
       setStreaming(false);
+      setSending(false);
       setToolStatus(null);
       setSendError(null);
       setEngineError(null);
@@ -131,12 +136,19 @@ export default function App() {
           setSending(false);
           if (event.threadId) void refreshMessages(event.threadId);
           break;
-        case 'error':
-          setEngineError(event.error);
+        case 'error': {
+          const prefix =
+            event.errorType === 'auth' ? 'Authentication needed: ' :
+            event.errorType === 'unavailable' ? 'Engine unavailable: ' :
+            event.errorType === 'quota' ? 'Quota limit: ' : '';
+          setEngineError(`${prefix}${event.error}`);
+          streamRef.current = '';
+          setStreamingText('');
           setStreaming(false);
           setSending(false);
           setToolStatus(null);
           break;
+        }
       }
     });
     return unsubscribe;
@@ -145,11 +157,13 @@ export default function App() {
   const handleSend = useCallback(async () => {
     const bridge = getBridge();
     const text = draft.trim();
-    if (!bridge || !activeThreadId || text.length === 0 || sending) return;
+    const sentId = activeThreadId;
+    if (!bridge || !sentId || text.length === 0 || sending) return;
     setSending(true);
     setSendError(null);
     try {
-      const result = await bridge.sendPrompt(activeThreadId, text);
+      const result = await bridge.sendPrompt(sentId, text);
+      if (activeRef.current !== sentId) return; // user switched threads mid-flight; leave new thread alone
       if (!result.accepted) {
         setSendError(result.error ?? 'Engine did not accept the prompt.');
         setSending(false);
@@ -158,6 +172,7 @@ export default function App() {
       setDraft('');
       setStreaming(true);
     } catch (e) {
+      if (activeRef.current !== sentId) return;
       setSendError(e instanceof Error ? e.message : 'Send failed.');
       setSending(false);
     }
@@ -303,7 +318,7 @@ export default function App() {
 
       <footer className="footer-status">
         <span>Local workspace{activeThread ? ` / ${activeThread.projectPath}` : ''}</span>
-        <span>{engine?.available ? `Engine ready${engine.version ? ` · ${engine.version}` : ''}` : 'Engine status unknown'}</span>
+        <span>{engine?.available ? `Engine ready${engine.version ? ` · ${engine.version}` : ''}` : 'Engine status unknown'}{runtime ? ` · Electron ${runtime.electron}` : ''}</span>
       </footer>
 
       {(sidebarOpen || contextOpen) ? (

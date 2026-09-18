@@ -60,6 +60,14 @@ Training supervision, TensorBoard/GPU telemetry, dataset/checkpoint tools, multi
   DeepSeek slug does not exist).
   Live RPC prompts return streamed text successfully. The app reads an optional
   `MLCOPILOT_MODEL` env override; otherwise Pi uses its configured default.
+- Full-review findings fixed: per-thread Pi sessions via `--session-dir` (HOME is
+  inherited so Pi reads the user's real settings/auth — overriding HOME silently
+  changed the active model); run finalization on `agent_end` with `willRetry=false`
+  (Pi 0.73.1 RPC does not reliably emit `agent_settled`); empty model replies
+  surface an honest error; dead prototype host files removed; `test:e2e` script
+  added; single-instance lock in main.
+- Live end-to-end through the real app (OpenRouter nex-mini): prompt accepted,
+  exact reply streamed, persisted, and settled.
 - Unauthenticated `prompt` is rejected with a missing-API-key error; the adapter
   surfaces this as `{ ok: false, errorType: 'auth' }`. `abort` succeeds; strict
   LF JSONL framing parses with zero unparseable lines (`tests/pi-rpc-spike.cjs`,

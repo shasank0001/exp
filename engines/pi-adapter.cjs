@@ -4,7 +4,7 @@
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 
-function createPiEngine({ piPath = 'pi', home, cwd, sessionMode = 'none', model } = {}) {
+function createPiEngine({ piPath = 'pi', home, cwd, sessionMode = 'none', sessionDir, model } = {}) {
   let child = null;
   let buffer = '';
   let nextId = 0;
@@ -105,6 +105,7 @@ function createPiEngine({ piPath = 'pi', home, cwd, sessionMode = 'none', model 
       const args = sessionMode === 'persistent'
         ? ['--mode', 'rpc']
         : ['--mode', 'rpc', '--no-session'];
+      if (sessionDir) args.push('--session-dir', sessionDir);
       if (model) args.push('--model', model);
       child = spawn(piPath, args, {
         cwd,
